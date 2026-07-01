@@ -1,0 +1,68 @@
+{
+  "tasks": [
+    {
+      "id": "85d37625",
+      "cron": "53 17 4 7 *",
+      "prompt": "[AUTO CHECK-IN: 🚨 GATE α — Theory Freeze] 今天是 2026-07-04 17:53，Sprint Week 1 末，BLOCKING gate。请向用户提问以下3个 PASS 标准：\n\n1. 是否所有 4 个 proof 完整 + 独立 verify？(PASS criterion)\n2. Min implementation 是否在 toy trajectories 上跑通？(PASS criterion)\n3. Related Work 是否按 v0.2 更新（含 AgentSentry / AttriGuard / MemLineage）？(PASS criterion)\n\n**判决规则**：\n- ALL 3 YES → Gate α PASS → 进入 Week 2 (controlled intervention suite)\n- ANY NO → 立即建议 STOP sprint → 撤退到 NeurIPS 2027 (May 2027 deadline)\n\n撤退损失：5 天工作量，但获得 10 个月打磨期。**不要硬撑通过 Gate**。",
+      "createdAt": 1782832784748,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "7237270a",
+      "cron": "11 18 8 7 *",
+      "prompt": "[AUTO CHECK-IN: Week 2 Mid Pulse] 今天是 2026-07-08 18:11，Sprint Week 2 中段。轻量 check-in，非 gate。请向用户提问：\n\n1. 8 个 baseline 实现了几个？（必须有：frozen-only, flattened, raw-RAG, CIP, no-graph, sequential, random, PrecedentGuard）\n2. 1000 paired controlled intervention suite 是否按 schedule？\n3. 有什么意外 blocker 吗？\n\n如果 baseline 完成 < 5 个，立即建议砍 Trust ablation 至 2 个 variant 来追赶 Gate β。这是 Gate β (July 11) 前的早期预警。",
+      "createdAt": 1782832786882,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "9485f433",
+      "cron": "48 17 11 7 *",
+      "prompt": "[AUTO CHECK-IN: 🚨 GATE β — Certificate Validity] 今天是 2026-07-11 17:48，Sprint Week 2 末，BLOCKING gate。请向用户提问以下3个 PASS 标准：\n\n1. Certificate validity 是否在 dev set 上成立？（empirical FNR/FPR ≤ 预测 bound，至少 4/5 seeds 通过）\n2. 所有 8 个 baseline 是否产出数字？\n3. 4 个 trust variant（no provenance / signature only / +lineage / full policy attestation）对比数字是否就绪？\n\n**判决规则**：\n- Certificate VALID + baselines complete → Gate β PASS → 进入 Week 3 (3 个 benchmark suite)\n- Certificate INVALID → 立即建议 STOP sprint → 撤退到 NeurIPS 2027\n\n撤退损失：12 天工作量。**不要硬撑**——certificate 无效投出去是 desk reject。",
+      "createdAt": 1782832788201,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "7e4bb11b",
+      "cron": "13 18 15 7 *",
+      "prompt": "[AUTO CHECK-IN: Week 3 Mid Pulse] 今天是 2026-07-15 18:13，Sprint Week 3 中段。轻量 check-in，非 gate。请向用户提问：\n\n1. Suite A (AgentHarm + R-Judge) — 跑完了吗？\n2. Suite B (AgentDojo + InjecAgent) — 跑完了吗？\n3. Suite C (AgentPoison + MINJA) — 跑完了吗？\n4. 是否需要砍 Suite C 部分内容来集中精力做 adaptive attack？\n\n如果 2+ suite 仍未完成，立即建议 triage：保 Suite A + B，砍 Suite C 至单一攻击。这是 Gate γ (July 18) 前的早期预警。",
+      "createdAt": 1782832789577,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "021e45cb",
+      "cron": "51 17 18 7 *",
+      "prompt": "[AUTO CHECK-IN: 🚨 GATE γ — Tables/Figures Freeze] 今天是 2026-07-18 17:51，Sprint Week 3 末，BLOCKING gate。请向用户提问以下5个 PASS 标准：\n\n1. 所有 3 个 benchmark suite 全部完成？\n2. Adaptive attack 数据已收集？\n3. 所有 4 张图（Figure 1 TikZ + Figure 2-4 matplotlib）是否冻结？\n4. Tables 1, 2, 3 数据是否冻结（无 cherry-pick）？\n5. 主文 7 页 narrative 是否已起草？\n\n**判决规则**：\n- ALL YES → Gate γ PASS → Week 4 写作 + red-team\n- ANY NO → 建议砍内容 + 改投 ICLR 2028 (Sep 2026 deadline)\n\n撤退损失：19 天工作量，但 ICLR 仍可投。**绝不要硬撑投未完成稿件**。",
+      "createdAt": 1782832790896,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "e67e8eff",
+      "cron": "23 10 21 7 *",
+      "prompt": "[AUTO CHECK-IN: 🛑 ABSTRACT SUBMISSION DAY] 今天是 2026-07-21 10:23，AAAI 2027 abstract 截止 17:00 今晚。请向用户提问：\n\n1. Abstract 草稿是否完成？\n2. Abstract 中所有数值 claim 是否全部从已记录实验 verify 过（无 placeholder）？\n3. 投稿 portal 账号是否已就绪（OpenReview / EasyChair）？\n\n**HARD ACTION**：今晚 **16:00** 提交，给系统问题留 1 小时 buffer。**NOT 16:59**。\n\n如果有任何 unverified claim，立即修订或删除——AAAI desk reject 标准之一就是 abstract 与正文不一致。",
+      "createdAt": 1782832792200,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "98f52f09",
+      "cron": "9 18 27 7 *",
+      "prompt": "[AUTO CHECK-IN: Final Review — eve of submission] 今天是 2026-07-27 18:09，paper 投稿前夜。请向用户提问5个 final-audit 项：\n\n1. 所有 4 位 red-team reviewer 的反馈是否已整合？（Causal / Security / Learning Theory / Empirical）\n2. 每个 DOI / arXiv ID 是否已 verify？\n3. LaTeX 编译是否无 warning？\n4. Reproducibility checklist 是否完成？\n5. 明天投稿目标时间是否锁定为 **12:00 noon**（NOT 16:59）？\n\n如果任何一项 NO，立即列出 today/tomorrow 早晨的修复 plan。明天是 Mon Jul 28，没有缓冲日。",
+      "createdAt": 1782832793529,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    },
+    {
+      "id": "03947dfc",
+      "cron": "17 9 28 7 *",
+      "prompt": "[AUTO CHECK-IN: 🛑 PAPER SUBMISSION DAY] 今天是 2026-07-28 09:17，AAAI 2027 paper 截止 17:00 今晚。请向用户提问：\n\n1. 最终 PDF 是否锁定？\n2. 所有 supplementary material（appendix proofs, reproducibility checklist, code link）是否打包就绪？\n3. 是否按 safety protocol 在 **12:00 noon 前**提交？\n\n**绝对原则**：不要等到下午。每年 AAAI 投稿系统在最后一小时都会拥堵或宕机。**Submit by noon**。\n\n如果有任何 last-minute 问题，立刻报告，我帮你快速决策。",
+      "createdAt": 1782832794826,
+      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
+      "createdByPid": 13848
+    }
+  ]
+}

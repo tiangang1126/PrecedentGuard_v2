@@ -1,0 +1,210 @@
+PrecedentGuard v0.2  Day 1 Numerical Example
+Sprint date: 2026-07-01 (Sprint Day 1, Gate alpha at 2026-07-04 EOD)
+Script: scripts/day1_theorem_numerical_example.py
+
+==============================================================================
+Sanity check: manual calculations vs script output
+==============================================================================
+  Advisor guidance Section 5 claims:
+    - Scenario A (all replacements): rho_+ = rho_- = 1.0
+    - Scenario B (all unauth insert): rho_+ = 1.0, rho_- = 0.0
+    - t (n=500, |Gamma|=20, alpha=0.05, 2|Gamma|) approx 0.082
+    - U_FN approx 0.10 + 0.082 = 0.182 (with R_hat_FN=0.10)
+    - U_FP approx 0.05 + 0.082 = 0.132 (with R_hat_FP=0.05)
+
+  [PASS] rho_+ (A)     computed=1.000000  expected~1.000  diff=+0.000000
+  [PASS] rho_- (A)     computed=1.000000  expected~1.000  diff=+0.000000
+  [PASS] rho_+ (B)     computed=1.000000  expected~1.000  diff=+0.000000
+  [PASS] rho_- (B)     computed=0.000000  expected~0.000  diff=+0.000000
+  [PASS] t (n=500)     computed=0.081759  expected~0.082  diff=-0.000241
+  [PASS] U_FN A        computed=0.181759  expected~0.182  diff=-0.000241
+  [PASS] U_FP A        computed=0.131759  expected~0.132  diff=-0.000241
+
+  Overall sanity check: PASS
+
+==============================================================================
+Scenario A: All 3 modifications are REPLACEMENTS
+==============================================================================
+  (worst case for downward shift: rho_- is at its maximum)
+  c_neg (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  c_pos (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  eps_neg=1.000, eps_pos=1.000
+  attack budget m: {'mem': 1, 'obs': 1, 'ret': 0, 'tool': 0, 'prec': 1}  (sum=3)
+  m_ins_unattested: {'mem': 0, 'obs': 0, 'ret': 0, 'tool': 0, 'prec': 0}  (sum=0)
+  n_1=500, n_0=500, |Gamma|=20, alpha=0.05
+  Hoeffding multiplier (N=mult*|Gamma|): 2
+
+Theorem 1 (rho +/-):
+  Delta_k        : {'mem': 0.6, 'obs': 0.6, 'ret': 0.6, 'tool': 0.6, 'prec': 0.6}
+  r_+ (pre-clip) : 1.8000
+  r_- (pre-clip) : 1.8000
+  rho_+ = min(eps_+, r_+)  = min(1.000, 1.800) = 1.0000
+  rho_- = min(eps_-, r_-)  = min(1.000, 1.800) = 1.0000
+
+Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
+  Hoeffding tail t_FN : 0.081759
+  Hoeffding tail t_FP : 0.081759
+  U_FN = R_hat_FN + t_FN = 0.181759
+  U_FP = R_hat_FP + t_FP = 0.131759
+  Non-vacuity check   : FN OK (< 0.5) | FP OK (< 0.5)
+
+==============================================================================
+Scenario B: All 3 modifications are UNAUTHENTICATED INSERTIONS
+==============================================================================
+  (best case for downward shift by trust rule: rho_- = 0)
+  c_neg (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  c_pos (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  eps_neg=1.000, eps_pos=1.000
+  attack budget m: {'mem': 1, 'obs': 1, 'ret': 0, 'tool': 0, 'prec': 1}  (sum=3)
+  m_ins_unattested: {'mem': 1, 'obs': 1, 'ret': 0, 'tool': 0, 'prec': 1}  (sum=3)
+  n_1=500, n_0=500, |Gamma|=20, alpha=0.05
+  Hoeffding multiplier (N=mult*|Gamma|): 2
+
+Theorem 1 (rho +/-):
+  Delta_k        : {'mem': 0.6, 'obs': 0.6, 'ret': 0.6, 'tool': 0.6, 'prec': 0.6}
+  r_+ (pre-clip) : 1.8000
+  r_- (pre-clip) : 0.0000
+  rho_+ = min(eps_+, r_+)  = min(1.000, 1.800) = 1.0000
+  rho_- = min(eps_-, r_-)  = min(1.000, 0.000) = 0.0000
+
+Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
+  Hoeffding tail t_FN : 0.081759
+  Hoeffding tail t_FP : 0.081759
+  U_FN = R_hat_FN + t_FN = 0.181759
+  U_FP = R_hat_FP + t_FP = 0.131759
+  Non-vacuity check   : FN OK (< 0.5) | FP OK (< 0.5)
+
+==============================================================================
+Scenario C: MIXED (1 replacement + 2 unauth insertions)
+==============================================================================
+  (typical adversary; only 1 modification contributes to rho_-)
+  c_neg (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  c_pos (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  eps_neg=1.000, eps_pos=1.000
+  attack budget m: {'mem': 1, 'obs': 1, 'ret': 0, 'tool': 0, 'prec': 1}  (sum=3)
+  m_ins_unattested: {'mem': 0, 'obs': 1, 'ret': 0, 'tool': 0, 'prec': 1}  (sum=2)
+  n_1=500, n_0=500, |Gamma|=20, alpha=0.05
+  Hoeffding multiplier (N=mult*|Gamma|): 2
+
+Theorem 1 (rho +/-):
+  Delta_k        : {'mem': 0.6, 'obs': 0.6, 'ret': 0.6, 'tool': 0.6, 'prec': 0.6}
+  r_+ (pre-clip) : 1.8000
+  r_- (pre-clip) : 0.6000
+  rho_+ = min(eps_+, r_+)  = min(1.000, 1.800) = 1.0000
+  rho_- = min(eps_-, r_-)  = min(1.000, 0.600) = 0.6000
+
+Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
+  Hoeffding tail t_FN : 0.081759
+  Hoeffding tail t_FP : 0.081759
+  U_FN = R_hat_FN + t_FN = 0.181759
+  U_FP = R_hat_FP + t_FP = 0.131759
+  Non-vacuity check   : FN OK (< 0.5) | FP OK (< 0.5)
+
+==============================================================================
+Hoeffding multiplier comparison: 2|Gamma| (one-sided) vs 4|Gamma| (two-sided)
+==============================================================================
+  Purpose: quantify the tail difference to justify the recommended choice.
+
+  n=  250 | t(2|Gamma|)=0.115625 | t(4|Gamma|)=0.121472 | gap=0.005847 (4.81% relative)
+  n=  500 | t(2|Gamma|)=0.081759 | t(4|Gamma|)=0.085894 | gap=0.004134 (4.81% relative)
+  n= 1000 | t(2|Gamma|)=0.057813 | t(4|Gamma|)=0.060736 | gap=0.002923 (4.81% relative)
+  n= 2000 | t(2|Gamma|)=0.040880 | t(4|Gamma|)=0.042947 | gap=0.002067 (4.81% relative)
+  n= 5000 | t(2|Gamma|)=0.025855 | t(4|Gamma|)=0.027162 | gap=0.001307 (4.81% relative)
+
+==============================================================================
+Sensitivity: how does |Gamma| affect the tail width?
+==============================================================================
+  Fixed: n_1=n_0=500, alpha=0.05, multiplier=2 (one-sided)
+
+  |Gamma|=   1 | t = 0.060736
+  |Gamma|=   5 | t = 0.072790
+  |Gamma|=  10 | t = 0.077405
+  |Gamma|=  20 | t = 0.081759
+  |Gamma|=  50 | t = 0.087183
+  |Gamma|= 100 | t = 0.091072
+  |Gamma|= 500 | t = 0.099516
+
+==============================================================================
+Certificate non-vacuity vs empirical R_hat (Scenario A, mult=2)
+==============================================================================
+  U_FN = R_hat_FN + t_FN; U_FP = R_hat_FP + t_FP
+  Non-vacuous <=> U < 0.5
+
+  Fixed tail t = 0.081759
+
+       R_hat |     U (R_hat+t) | non-vacuous?
+  ---------- | --------------- | -------------
+      0.0000 |          0.0818 | OK
+      0.0200 |          0.1018 | OK
+      0.0500 |          0.1318 | OK
+      0.1000 |          0.1818 | OK
+      0.2000 |          0.2818 | OK
+      0.3000 |          0.3818 | OK
+      0.4000 |          0.4818 | OK
+      0.4200 |          0.5018 | VACUOUS
+
+==============================================================================
+Edge case: zero attack budget (all m_k = 0)
+==============================================================================
+  c_neg (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  c_pos (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  eps_neg=1.000, eps_pos=1.000
+  attack budget m: {'mem': 0, 'obs': 0, 'ret': 0, 'tool': 0, 'prec': 0}  (sum=0)
+  m_ins_unattested: {'mem': 0, 'obs': 0, 'ret': 0, 'tool': 0, 'prec': 0}  (sum=0)
+  n_1=500, n_0=500, |Gamma|=20, alpha=0.05
+  Hoeffding multiplier (N=mult*|Gamma|): 2
+
+Theorem 1 (rho +/-):
+  Delta_k        : {'mem': 0.6, 'obs': 0.6, 'ret': 0.6, 'tool': 0.6, 'prec': 0.6}
+  r_+ (pre-clip) : 0.0000
+  r_- (pre-clip) : 0.0000
+  rho_+ = min(eps_+, r_+)  = min(1.000, 0.000) = 0.0000
+  rho_- = min(eps_-, r_-)  = min(1.000, 0.000) = 0.0000
+
+Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
+  Hoeffding tail t_FN : 0.081759
+  Hoeffding tail t_FP : 0.081759
+  U_FN = R_hat_FN + t_FN = 0.181759
+  U_FP = R_hat_FP + t_FP = 0.131759
+  Non-vacuity check   : FN OK (< 0.5) | FP OK (< 0.5)
+  Interpretation: rho_+ = rho_- = 0 (no adversary can move the score);
+  U_FN, U_FP degrade to the clean empirical error + Hoeffding tail.
+
+==============================================================================
+Edge case: attack budget saturates the outer clip
+==============================================================================
+  c_neg (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  c_pos (per type): {'mem': 0.3, 'obs': 0.3, 'ret': 0.3, 'tool': 0.3, 'prec': 0.3}
+  eps_neg=1.000, eps_pos=1.000
+  attack budget m: {'mem': 5, 'obs': 5, 'ret': 0, 'tool': 0, 'prec': 5}  (sum=15)
+  m_ins_unattested: {'mem': 0, 'obs': 0, 'ret': 0, 'tool': 0, 'prec': 0}  (sum=0)
+  n_1=500, n_0=500, |Gamma|=20, alpha=0.05
+  Hoeffding multiplier (N=mult*|Gamma|): 2
+
+Theorem 1 (rho +/-):
+  Delta_k        : {'mem': 0.6, 'obs': 0.6, 'ret': 0.6, 'tool': 0.6, 'prec': 0.6}
+  r_+ (pre-clip) : 9.0000
+  r_- (pre-clip) : 9.0000
+  rho_+ = min(eps_+, r_+)  = min(1.000, 9.000) = 1.0000
+  rho_- = min(eps_-, r_-)  = min(1.000, 9.000) = 1.0000
+
+Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
+  Hoeffding tail t_FN : 0.081759
+  Hoeffding tail t_FP : 0.081759
+  U_FN = R_hat_FN + t_FN = 0.181759
+  U_FP = R_hat_FP + t_FP = 0.131759
+  Non-vacuity check   : FN OK (< 0.5) | FP OK (< 0.5)
+  Interpretation: raw sum 15*0.6 = 9.0 >> outer clip 1.0, so rho +/- = 1.0.
+  This is Remark 2 in the skeleton (outer clip as adaptive-adversary safety).
+
+==============================================================================
+Summary
+==============================================================================
+  * Theorem 1 directional bound: computed rho_+/rho_- match hand calc.
+  * Theorem 3 finite-sample tail: computed t matches hand calc (~0.082).
+  * Certificate non-vacuous on the baseline toy config for R_hat up to
+    approximately 0.418 (i.e., 0.5 - t).
+  * 2|Gamma| vs 4|Gamma| gap grows slowly; see the multiplier comparison
+    section for exact numbers at various n.
+  * Skeleton Section 7 Self-Review Checklist item 9 (non-vacuous
+    numerical example) is now supported by this deterministic script.

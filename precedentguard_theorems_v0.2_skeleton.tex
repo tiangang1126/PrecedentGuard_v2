@@ -1,0 +1,528 @@
+% =========================================================
+% precedentguard_theorems_v0.2_skeleton.tex
+% PrecedentGuard — Complete Proof Skeleton for v0.2 Theorems
+% AAAI 2027 Submission Working Document
+% Created: 2026-06-30 evening (Day 0)
+% Proofs due: Day 1 (July 1) EOD
+%
+% Contents:
+%   Theorem 1: Directional Intervention Sensitivity Bound
+%   Theorem 2: Population Double-Sided Risk Bound
+%   Theorem 3: Finite-Sample Double-Sided Certificate
+%   Proposition 1: TV-based Indistinguishability Lower Bound
+%   Corollary 1: Authenticity is not Semantic Information
+%
+% Status markers:
+%   [FILL: ...] = you must complete this content
+%   [VERIFY: ...] = numerical / definitional choice to confirm
+%   [REF: ...] = citation to add at this point
+% =========================================================
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm, mathtools}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\newcommand{\TODO}[1]{{\color{red}\textbf{[FILL: #1]}}}
+\newcommand{\VERIFY}[1]{{\color{orange}\textbf{[VERIFY: #1]}}}
+\newcommand{\REF}[1]{{\color{teal}\textsf{[REF: #1]}}}
+\newcommand{\NOTE}[1]{{\color{blue}\textit{[Note: #1]}}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{remark}{Remark}
+
+\DeclareMathOperator{\TV}{TV}
+\DeclareMathOperator{\KL}{KL}
+\DeclareMathOperator{\clip}{clip}
+\DeclareMathOperator{\sign}{sign}
+\DeclareMathOperator{\attested}{attested}
+\DeclareMathOperator{\type}{type}
+
+\title{PrecedentGuard --- Complete Proof Skeleton\\
+       \large Theorems 1--3 and Proposition 1 (v0.2 Framework)}
+\author{AAAI 2027 Working Document}
+\date{2026-06-30}
+
+\begin{document}
+\maketitle
+
+\section{Setup and Notation (Aligned with v0.2 \S 3)}
+
+\subsection{Score decomposition}
+
+The PrecedentGuard score on input $x = (I, A, P_x, R_x)$ is
+\[
+S_{\mathrm{PG}}(x) = B(I, A) + \clip\!\Big(\sum_{e \in P_x} \beta_e \tilde\delta_e^{\mathrm{PG}}
+        + \sum_{i \in R_x} w_i \tilde\delta_i^{\mathrm{PG}},\ -\varepsilon_-,\ \varepsilon_+ \Big),
+\]
+where $B(I, A) \in \mathbb{R}$ is the frozen guard's intent--action base score,
+each per-evidence contribution $\tilde\delta_e^{\mathrm{PG}}$ is clipped to a type-specific interval $[-c_{\type(e)}^-, c_{\type(e)}^+]$,
+and the directional trust constraint replaces the lower endpoint by $0$ when $\attested(e, x) = 0$:
+\[
+\tilde\delta_e^{\mathrm{PG}} =
+\begin{cases}
+\max\!\bigl(0,\ \tilde\delta_e\bigr), & \attested(e,x) = 0,\\[2pt]
+\tilde\delta_e, & \attested(e,x) = 1.
+\end{cases}
+\]
+The decision is $\hat Y(x) = \mathbf{1}[S_{\mathrm{PG}}(x) \ge \theta]$.
+
+\subsection{Attack class and budget}
+
+The adversary perturbs at most $m_k$ evidence nodes of type $k$, summarized in a vector budget
+$\mathbf m = (m_{\mathrm{mem}}, m_{\mathrm{obs}}, m_{\mathrm{ret}}, m_{\mathrm{tool}}, m_{\mathrm{prec}})$.
+We write $\mathcal A(\mathbf m)$ for the set of allowed attacks.
+For an attack $a$, let $S(x)$ denote the clean score and $S(a(x))$ the score under attack
+with the same $(I, A)$.
+
+\subsection{Class-conditional margins}
+
+For an example $x$ with safety label $Y \in \{0, 1\}$, the clean margin is
+\[
+M_1(x) = S(x) - \theta \quad (Y = 1, \text{unsafe}),
+\qquad
+M_0(x) = \theta - S(x) \quad (Y = 0, \text{safe}).
+\]
+
+\subsection{Assumptions (A1--A4, v0.2 \S 5.1)}
+
+\begin{assumption}[Execution-graph fidelity]\label{a1}
+Every mutable evidence item that enters $S_{\mathrm{PG}}$ is represented by an
+instrumented node in the EIG. Hidden channels outside the instrumentation are out of scope.
+\end{assumption}
+
+\begin{assumption}[Bounded contribution interface]\label{a2}
+Each per-evidence contribution is clipped to $[-c_{\type(e)}^-, c_{\type(e)}^+]$ before aggregation.
+The outer aggregate is clipped to $[-\varepsilon_-, \varepsilon_+]$.
+\end{assumption}
+
+\begin{assumption}[Attack budget]\label{a3}
+The adversary modifies at most $m_k$ evidence nodes of each type $k$, counting insertions, deletions, and
+replacements explicitly. A replacement counts as one modified node.
+\end{assumption}
+
+\begin{assumption}[Attestation boundary]\label{a4}
+For the primary certificate, the adversary cannot forge or improperly obtain a policy attestation.
+Authenticated but semantically unauthorized writes remain in the threat model.
+Sensitivity to attestation error $\eta$ is treated in \S 5.5 of the main paper.
+\end{assumption}
+
+\NOTE{These assumptions are visible deployment conditions, not universal claims.}
+
+% =========================================================
+\section{Theorem 1: Directional Intervention Sensitivity Bound}
+% =========================================================
+
+\begin{theorem}[Directional Intervention Sensitivity Bound]\label{thm:1}
+Under Assumptions~\ref{a1}--\ref{a4}, for every attack $a \in \mathcal A(\mathbf m)$ and every input $x$,
+\[
+- \rho_-(\mathbf m) \ \le\ S(a(x)) - S(x) \ \le\ \rho_+(\mathbf m),
+\]
+where, writing $\Delta_k := c_k^- + c_k^+$ and $m_k^{\mathrm{ins,unattested}} \le m_k$ for the
+unauthenticated-insertion sub-budget of type $k$,
+\[
+\rho_+(\mathbf m) = \min\!\Big\{\varepsilon_+,\ \sum_k m_k \Delta_k\Big\},
+\]
+\[
+\rho_-(\mathbf m) = \min\!\Big\{\varepsilon_-,\ \sum_k \big(m_k - m_k^{\mathrm{ins,unattested}}\big)\Delta_k\Big\}.
+\]
+In particular, an unauthenticated insertion alone cannot decrease the score.
+\end{theorem}
+
+\subsection{Proof of Theorem 1}
+
+\begin{proof}
+Let $Z(x) = \sum_e \beta_e \tilde\delta_e^{\mathrm{PG}} + \sum_i w_i \tilde\delta_i^{\mathrm{PG}}$ denote
+the clean pre-outer-clip aggregate, and $Z(a(x))$ the attacked aggregate.
+Let $T \subseteq P_x \cup R_x$ index the modified terms. Write
+\[
+Z(a(x)) - Z(x) = \sum_{j \in T} \bigl(z_j^{a} - z_j\bigr),
+\]
+where each $z_j$ is the (clipped, trust-adjusted) contribution of the $j$-th term.
+
+\paragraph{Step 1 (per-term envelope).}
+For a modified term of type $k$, the clean and attacked values both lie in $[-c_k^-, c_k^+]$
+after type clipping. Hence
+\[
+-(c_k^- + c_k^+) \ \le\ z_j^{a} - z_j \ \le\ c_k^- + c_k^+ = \Delta_k.
+\]
+
+\paragraph{Step 2 (directional refinement for unauthenticated insertions).}
+Consider an \emph{unauthenticated} insertion: an attacker inserts a fresh evidence node $e$ such that
+$\attested(e, x) = 0$. Before the directional trust rule, this term could carry a contribution as low as $-c_k^-$.
+After applying $\tilde\delta_e^{\mathrm{PG}} = \max(0, \tilde\delta_e)$, the minimum possible value is $0$.
+Since the clean configuration assigns $0$ to a non-existent node by convention, the change is
+\[
+z_j^{a} - z_j \in [0,\ c_k^+] \qquad \text{(unauthenticated insertion of type }k\text{)}.
+\]
+Hence such terms contribute nothing to the downward shift.
+
+\paragraph{Step 3 (deletions and replacements remain bidirectional).}
+A deletion removes an existing $z_j \in [-c_k^-, c_k^+]$ and sets it to $0$, giving change in $[-c_k^+,\ c_k^-]$;
+a replacement keeps the attacker in the full bidirectional envelope $[-\Delta_k,\ \Delta_k]$.
+Replacements of \emph{already-attested} evidence retain the bidirectional envelope because the trust rule
+permits negative attested contributions.
+
+\paragraph{Step 4 (summation over modified terms).}
+Summing per-term envelopes over $T$ yields raw bounds
+\[
+-r_-(\mathbf m) \ \le\ Z(a(x)) - Z(x) \ \le\ r_+(\mathbf m),
+\]
+with
+\[
+r_+(\mathbf m) = \sum_k m_k \Delta_k,
+\qquad
+r_-(\mathbf m) = \sum_k \big(m_k - m_k^{\mathrm{ins,unattested}}\big)\Delta_k.
+\]
+
+\paragraph{Step 5 (effect of the outer clip).}
+The outer clip $C(z) = \clip(z,\ -\varepsilon_-,\ \varepsilon_+)$ is $1$-Lipschitz and monotone:
+for any $z_1, z_2$, $|C(z_1) - C(z_2)| \le |z_1 - z_2|$, and $C$ preserves order.
+Therefore
+\[
+S(a(x)) - S(x) = C(Z(a(x))) - C(Z(x)) \in \big[-r_-,\ r_+\big].
+\]
+Additionally, the image of $C$ has diameter $\varepsilon_- + \varepsilon_+$, so the change is also bounded
+componentwise by $\min(r_+, \varepsilon_+)$ above and $\min(r_-, \varepsilon_-)$ below.
+This yields exactly $\rho_+$ and $\rho_-$ as defined.
+\end{proof}
+
+\subsection{Remarks on Theorem 1}
+
+\begin{remark}[Tightness]\label{rem:thm1-tight}
+The upward bound is attained by an attacker that performs a single insertion of type $k^\star$ with the
+largest $c_{k^\star}^+$, with $\beta_e = 1$. The downward bound, restricted to non-insertion attacks,
+is attained by a single replacement of an attested positive term by its negative endpoint.
+\end{remark}
+
+\begin{remark}[Outer clip is not a redundant safety net]
+If the per-type caps $c_k^{\pm}$ are large, the outer clip $\varepsilon_\pm$ becomes the binding constraint
+and gives a uniform bound independent of $\mathbf m$. This is the configuration we recommend whenever
+the attacker can choose $\mathbf m$ adaptively.
+\end{remark}
+
+\begin{remark}[Limit of the bound]
+Theorem~\ref{thm:1} does \emph{not} imply that the underlying frozen guard is Lipschitz on arbitrary text.
+Robustness comes from preventing mutable evidence from entering an unbounded monolithic context,
+not from a textual smoothness property. \TODO{Add a one-line statement here citing why \S 4.2 of v0.2 explicitly avoids this claim.}
+\end{remark}
+
+% =========================================================
+\section{Theorem 2: Population Double-Sided Risk Bound}
+% =========================================================
+
+\begin{theorem}[Population Double-Sided Risk Bound]\label{thm:2}
+Under Theorem~\ref{thm:1},
+\[
+\sup_{a \in \mathcal A(\mathbf m)} \mathrm{FNR}(a)
+   \ \le\ \Pr\!\big(M_1 \le \rho_-(\mathbf m) \mid Y = 1\big),
+\]
+\[
+\sup_{a \in \mathcal A(\mathbf m)} \mathrm{FPR}(a)
+   \ \le\ \Pr\!\big(M_0 \le \rho_+(\mathbf m) \mid Y = 0\big).
+\]
+\end{theorem}
+
+\subsection{Proof of Theorem 2}
+
+\begin{proof}
+We show the FNR bound; the FPR bound is symmetric.
+
+Let $x$ have $Y = 1$ and suppose $M_1(x) > \rho_-(\mathbf m)$. Then
+\[
+S(x) - \theta > \rho_-(\mathbf m).
+\]
+By Theorem~\ref{thm:1},
+\[
+S(a(x)) \ge S(x) - \rho_-(\mathbf m) > \theta,
+\]
+so $\hat Y(a(x)) = 1$ (the attacked classifier still blocks), and $x$ is not a false negative under attack $a$.
+
+Therefore, for any attack $a \in \mathcal A(\mathbf m)$, the false-negative event satisfies
+\[
+\big\{\hat Y(a(x)) = 0,\ Y = 1\big\} \ \subseteq\ \big\{M_1(x) \le \rho_-(\mathbf m),\ Y = 1\big\}.
+\]
+Taking conditional probabilities and then supremum over $a \in \mathcal A(\mathbf m)$ gives the FNR claim.
+
+For FPR: if $Y = 0$ and $M_0(x) > \rho_+$, then $\theta - S(x) > \rho_+$, hence
+$S(a(x)) \le S(x) + \rho_+ < \theta$, so $\hat Y(a(x)) = 0$ and $x$ is not a false positive.
+The same containment argument yields the FPR bound.
+\end{proof}
+
+\subsection{Remarks on Theorem 2}
+
+\begin{remark}[Clean errors are absorbed]
+A clean false negative has $S(x) < \theta$, i.e.\ $M_1(x) < 0 \le \rho_-$. Such examples are already in
+the bounding event $\{M_1 \le \rho_-\}$, so the theorem implies $\mathrm{FNR}^{\mathrm{clean}} \le U_{\mathrm{FN}}$
+as a special case.
+\end{remark}
+
+\begin{remark}[Avoiding the trivial ``always block'' solution]
+A vacuous classifier that blocks everything has $\mathrm{FNR} = 0$ but $\mathrm{FPR} = 1$.
+The double-sided structure prevents passing this off as ``certified safe'': the FPR bound
+exposes the safe-class margin distribution, which collapses to a point mass at $-\theta$ under always-block.
+\TODO{Insert a one-paragraph illustration of how the calibration of $\theta$, $\varepsilon_\pm$, $c_k^\pm$
+on the dev set jointly controls both $U_{\mathrm{FN}}$ and $U_{\mathrm{FP}}$.}
+\end{remark}
+
+% =========================================================
+\section{Theorem 3: Finite-Sample Double-Sided Certificate}
+% =========================================================
+
+Let $C_1$ and $C_0$ be \emph{independent} held-out calibration subsets containing $n_1$ unsafe and $n_0$ safe
+examples, respectively. For a configuration $\gamma = (\theta, \mathbf c, \varepsilon_-, \varepsilon_+)$, define
+\[
+\widehat R_{\mathrm{FN}}(\gamma) = \frac{1}{n_1} \sum_{x \in C_1} \mathbf{1}\!\big[M_1(x) \le \rho_-(\gamma)\big],
+\quad
+\widehat R_{\mathrm{FP}}(\gamma) = \frac{1}{n_0} \sum_{x \in C_0} \mathbf{1}\!\big[M_0(x) \le \rho_+(\gamma)\big].
+\]
+Let $\Gamma$ be the (finite) grid of configurations under consideration.
+
+\begin{theorem}[Finite-Sample Double-Sided Certificate]\label{thm:3}
+With probability at least $1 - \alpha$ over the draw of $C_0 \cup C_1$, simultaneously for all $\gamma \in \Gamma$,
+\[
+\sup_{a \in \mathcal A(\mathbf m)} \mathrm{FNR}(a)
+   \ \le\ \widehat R_{\mathrm{FN}}(\gamma) + \sqrt{\frac{\log(2|\Gamma|/\alpha)}{2 n_1}},
+\]
+\[
+\sup_{a \in \mathcal A(\mathbf m)} \mathrm{FPR}(a)
+   \ \le\ \widehat R_{\mathrm{FP}}(\gamma) + \sqrt{\frac{\log(2|\Gamma|/\alpha)}{2 n_0}}.
+\]
+\end{theorem}
+
+\begin{remark}[Sidedness of the union bound]\label{rem:thm3-sidedness}
+We use \emph{one-sided} Hoeffding, giving the multiplier $2$ (one tail direction per class, $|\Gamma|$ configurations, $2$ classes). Only the upper-tail deviation $R^{\star}(\gamma) \le \widehat R(\gamma) + t$ is required for a valid upper-bound certificate. A conservative two-sided variant would replace $2|\Gamma|$ by $4|\Gamma|$; the numerical comparison in \texttt{scripts/day1\_theorem\_numerical\_example.py} shows the two-sided variant yields a $4.81\%$ larger tail at fixed $|\Gamma|$ and $\alpha$, independent of $n$. We adopt the tighter one-sided version and cite this remark explicitly in \S 5.4 of the main draft.
+\end{remark}
+
+\subsection{Proof of Theorem 3}
+
+\begin{proof}
+Fix any $\gamma \in \Gamma$. For an example $x_i \in C_1$, define the Bernoulli random variable
+\[
+Z_i^{\mathrm{FN}}(\gamma) = \mathbf{1}\!\big[M_1(x_i) \le \rho_-(\gamma)\big].
+\]
+Since the $x_i$ are i.i.d.\ from the unsafe-class population,
+\[
+\mathbb{E}\!\big[Z_i^{\mathrm{FN}}(\gamma)\big] = \Pr\!\big(M_1 \le \rho_-(\gamma) \mid Y = 1\big)
+   \ =:\ R_{\mathrm{FN}}^{\star}(\gamma).
+\]
+By Hoeffding's inequality (one-sided),
+\[
+\Pr\!\Big(R_{\mathrm{FN}}^{\star}(\gamma) - \widehat R_{\mathrm{FN}}(\gamma) > t\Big)
+   \ \le\ \exp(-2 n_1 t^2),
+\]
+\REF{Hoeffding 1963; van der Vaart \emph{Asymptotic Statistics}, Lemma 2.2.7.}
+
+Apply a union bound over $\Gamma$ and over both classes. Let $N = 2 |\Gamma|$
+(one-sided Hoeffding per class, over $|\Gamma|$ configurations $\times\ 2$ classes; see Remark~\ref{rem:thm3-sidedness}).
+Set
+\[
+t = \sqrt{\frac{\log(N/\alpha)}{2 n_{\min}}} \quad \text{with } n_{\min} = \min(n_0, n_1),
+\]
+so that the simultaneous probability of any deviation exceeding $t$ in any of the $N$ tail events is at most $\alpha$.
+Then, with probability at least $1 - \alpha$, simultaneously for all $\gamma$ and both classes,
+\[
+R_{\mathrm{FN}}^{\star}(\gamma) \le \widehat R_{\mathrm{FN}}(\gamma) + \sqrt{\tfrac{\log(N/\alpha)}{2 n_1}},
+\qquad
+R_{\mathrm{FP}}^{\star}(\gamma) \le \widehat R_{\mathrm{FP}}(\gamma) + \sqrt{\tfrac{\log(N/\alpha)}{2 n_0}}.
+\]
+
+Combining with Theorem~\ref{thm:2}:
+\[
+\sup_{a \in \mathcal A(\mathbf m)} \mathrm{FNR}(a) \le R_{\mathrm{FN}}^{\star}(\gamma)
+   \le \widehat R_{\mathrm{FN}}(\gamma) + \sqrt{\tfrac{\log(N/\alpha)}{2 n_1}},
+\]
+and similarly for FPR.
+\end{proof}
+
+\subsection{Remarks on Theorem 3}
+
+\begin{remark}[Calibration--deployment matching]
+The bound is distribution-dependent: it estimates $R^{\star}(\gamma)$ on $C_0 \cup C_1$ and inherits validity
+only when the deployment risk distribution matches the calibration distribution for the relevant event.
+Cross-domain validity must be evaluated empirically (\S 6.5 of v0.2).
+\end{remark}
+
+\begin{remark}[Independence of calibration and test]
+The proof assumes $C_0$ and $C_1$ are drawn independently from the unsafe and safe class populations,
+and that $\gamma$ is selected on a separate development split. \TODO{Confirm in implementation that the
+configuration grid $\Gamma$ is fixed \emph{before} touching $C_0 \cup C_1$.}
+\end{remark}
+
+\begin{remark}[Conformal-risk-control as a stronger alternative]
+A conformal-risk-control variant (\REF{Angelopoulos \& Bates 2023, NeurIPS}) gives marginal guarantees without
+finite-grid union-bound losses. The paper defers this extension; \TODO{decide whether to include a
+half-paragraph mention in \S 5.4 Remark.}
+\end{remark}
+
+% =========================================================
+\section{Proposition 1: TV-Indistinguishability Lower Bound}
+% =========================================================
+
+For a fixed deployment context, let $Q_1$ and $Q_0$ denote the (attacked) observable distributions of guard
+\emph{inputs} for unsafe and safe decisions respectively. Here ``observable'' means the runtime evidence
+the guard $h$ receives, including all evidence-channel signals available to $h$.
+
+\begin{proposition}[Double-Sided Indistinguishability Lower Bound]\label{prop:1}
+For any (deterministic or randomized) binary guard $h$,
+\[
+\mathrm{FNR}(h) + \mathrm{FPR}(h) \ \ge\ 1 - \TV(Q_1,\ Q_0),
+\]
+and hence
+\[
+\max\!\big\{\mathrm{FNR}(h),\ \mathrm{FPR}(h)\big\} \ \ge\ \frac{1 - \TV(Q_1,\ Q_0)}{2}.
+\]
+In particular, if $Q_1 = Q_0$, at least one of $\mathrm{FNR}$ or $\mathrm{FPR}$ is at least $1/2$.
+\end{proposition}
+
+\subsection{Proof of Proposition 1}
+
+\begin{proof}
+The guard $h$ is a binary hypothesis test that, on observing input distributed as either $Q_1$ (unsafe)
+or $Q_0$ (safe), outputs a binary decision. The minimum possible sum of type-I and type-II errors over all
+(deterministic or randomized) tests between $Q_1$ and $Q_0$ is
+\[
+\inf_h \Big(\Pr_{Q_1}[h = 0] + \Pr_{Q_0}[h = 1]\Big) = 1 - \TV(Q_1, Q_0)
+\]
+by Le~Cam's two-point inequality \REF{Le Cam 1986, \emph{Asymptotic Methods in Statistical Decision Theory},
+Theorem 2.2}. Hence every binary guard $h$ satisfies
+\[
+\mathrm{FNR}(h) + \mathrm{FPR}(h) = \Pr_{Q_1}[h = 0] + \Pr_{Q_0}[h = 1] \ge 1 - \TV(Q_1, Q_0).
+\]
+The maximum-of-two bound follows from $\max(a, b) \ge (a + b)/2$ for non-negative $a, b$.
+\end{proof}
+
+\subsection{Remarks on Proposition 1}
+
+\begin{remark}[Role of Proposition 1]
+This proposition is a \emph{supporting clarification}, not the paper's primary novelty. Its purpose is to
+formalize a precise reason why provenance authenticity (a signature) and semantic authorization (a policy
+attestation tied to a safety label) must be separated: if an authenticated channel does not move
+$Q_1$ apart from $Q_0$, it cannot improve the classification floor.
+\end{remark}
+
+\begin{remark}[Compared to the previously-planned universal impossibility]
+The previous plan (v1.x, archived) stated a universal ``no-trust-anchor $\Rightarrow$ no double-sided control''
+impossibility. That claim was too broad because a guard may classify perfectly from an entirely different
+uncorrupted channel. Proposition~\ref{prop:1} replaces it with the correct, narrower obstruction:
+\emph{lack of label-separating information} in the attacker's observation channel.
+\end{remark}
+
+% =========================================================
+\section{Corollary 1: Authenticity is not Semantic Information}
+% =========================================================
+
+\begin{corollary}[Authenticity is not Semantic Information]\label{cor:1}
+Let $Z$ be an authenticated variable appended to the guard's observation (a signature, a write-time
+provenance tag, etc.). If
+\[
+\TV\!\big(Q_1^{O, Z},\ Q_0^{O, Z}\big) \ =\ \TV\!\big(Q_1^O,\ Q_0^O\big),
+\]
+then introducing $Z$ does not improve the lower bound of Proposition~\ref{prop:1}. In particular, a valid
+signature whose distribution is independent of the safety label, or that authenticates adversarially chosen
+content, cannot break indistinguishability.
+\end{corollary}
+
+\begin{proof}
+The bound in Proposition~\ref{prop:1} is monotone in the TV distance of the observation channel.
+If extending the channel from $O$ to $(O, Z)$ does not increase TV, the bound is unchanged.
+\end{proof}
+
+\NOTE{This formalizes why \S 1.2 of v0.2 distinguishes \emph{authenticity}
+from \emph{semantic authorization}: a policy attestation is informative about $Y$ only if its conditional
+distribution depends on $Y$.}
+
+% =========================================================
+\section{Day 1 Task Map (July 1)}
+% =========================================================
+
+\subsection{Hour-by-hour schedule}
+
+\begin{enumerate}[label=\textbf{\arabic*.}, leftmargin=*]
+
+\item \textbf{09:00--09:30 --- Compile check.} Compile this file. Fix any LaTeX errors (likely
+encoding or package-related). Verify all theorem environments render.
+
+\item \textbf{09:30--11:00 --- Theorem 1 elaboration.} Read Theorem~\ref{thm:1} and its proof.
+Resolve every \TODO{...} marker. The most non-trivial step is the case analysis in Steps 2--3:
+verify that your codebase's \emph{insertion} convention matches the proof (i.e., a clean ``no node''
+contributes $0$).
+
+\item \textbf{11:00--12:00 --- Theorem 2 elaboration.} The proof is short; the work is checking that
+$\rho_-(\mathbf m)$ as computed by your implementation matches the value used in the proof.
+Run one numerical example end-to-end.
+
+\item \textbf{14:00--16:00 --- Theorem 3 elaboration.} Resolve the \VERIFY{} marker on the constant
+$4 |\Gamma|$. Choose one of:
+\begin{itemize}
+  \item Conservative two-sided ($4|\Gamma|$): simpler narrative, slightly weaker bound.
+  \item One-sided ($2|\Gamma|$): tighter, requires explicit ``one-sided'' caveat.
+\end{itemize}
+Recommendation: use $2|\Gamma|$ and state it explicitly.
+
+\item \textbf{16:00--17:00 --- Proposition 1 elaboration.} Verify Le~Cam citation; this is standard
+but the exact reference matters for the rebuttal.
+
+\item \textbf{17:00--18:00 --- Independent review request.} Send this document plus a short summary email
+to a colleague with measure-theory background. Ask: ``Are Steps 2--3 of Theorem 1 watertight under
+your reading of insertion, deletion, and replacement?''
+\end{enumerate}
+
+\subsection{End-of-day checkpoint}
+
+By 18:00 you should have:
+\begin{itemize}[noitemsep]
+  \item All \TODO{} markers resolved.
+  \item The \VERIFY{} marker for Theorem 3 decided.
+  \item One numerical example run end-to-end demonstrating the bound.
+  \item One independent review request out.
+\end{itemize}
+
+% =========================================================
+\section{Self-Review Checklist (Before Gate $\alpha$)}
+% =========================================================
+
+\begin{enumerate}[label=$\Box$, leftmargin=*, noitemsep]
+\item Notation in this skeleton matches v0.2 main draft \S 3 \emph{exactly} (any divergence is corrected before Gate $\alpha$).
+\item Assumptions \ref{a1}--\ref{a4} are quoted verbatim from v0.2 \S 5.1.
+\item Theorem 1's directional refinement (Step 2) is consistent with the implementation of
+$\tilde\delta_e^{\mathrm{PG}} = \max(0, \tilde\delta_e)$ under $\attested = 0$.
+\item Theorem 2's containment $\{\hat Y = 0, Y = 1\} \subseteq \{M_1 \le \rho_-\}$ is established
+without invoking measure-theoretic regularity (only standard probability).
+\item Theorem 3's calibration set $C_0 \cup C_1$ is provably independent of the configuration grid $\Gamma$.
+\item Theorem 3's constant ($2|\Gamma|$ vs $4|\Gamma|$) is consistent throughout the paper.
+\item Proposition 1's Le~Cam citation is verified (Le Cam 1986 or Tsybakov 2009, chosen consistently).
+\item Corollary 1's monotonicity in TV is correctly invoked (no hidden randomization assumption).
+\item One numerical worked example (on a toy intervention) confirms the bound is non-vacuous.
+\item Independent mathematical review has provided a written response.
+\end{enumerate}
+
+\NOTE{All ten boxes must be checked by 2026-07-04 EOD (Gate $\alpha$). Any unchecked box is a
+sprint blocker, not a polish item.}
+
+% =========================================================
+\section{Failure Modes and Fallbacks}
+% =========================================================
+
+\begin{itemize}[noitemsep]
+\item \textbf{If Theorem 1's directional refinement is wrong (e.g., insertions can decrease the score under your
+actual implementation):} Revert to the symmetric bound $\rho_{\mathrm{sym}} = \min(\varepsilon_-+\varepsilon_+,\ \sum_k m_k \Delta_k)$
+and lose the asymmetric narrative.
+\item \textbf{If Theorem 3's calibration assumption fails (e.g., $\Gamma$ depends on $C_0 \cup C_1$):}
+Apply a holdout split or conformal-risk-control variant. \REF{Angelopoulos \& Bates 2023.}
+\item \textbf{If Proposition 1's TV bound is contested by a reviewer:} It is Le Cam's two-point inequality.
+Cite Tsybakov 2009 \emph{Introduction to Nonparametric Estimation}, Theorem 2.2, as a textbook source.
+\end{itemize}
+
+\end{document}

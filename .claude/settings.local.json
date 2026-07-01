@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(python scripts/day1_theorem_numerical_example.py)",
+      "Bash(tee scripts/day1_theorem_numerical_example.log)",
+      "Read(//c/Program Files/MiKTeX/miktex/bin/x64/**)",
+      "Read(//c//**)",
+      "Read(//c/Users/tiang/AppData/Local/Programs/MiKTeX/miktex/bin/x64/**)"
+    ]
+  }
+}

@@ -1,0 +1,461 @@
+% =========================================================
+% theorem2_proof_skeleton.tex
+% Theorem 2 (Impossibility) — Proof Skeleton
+% Project: PrecedentGuard / AAAI 2027 submission
+% Created: 2026-06-30
+% Status: SKELETON — fill in proof bodies marked [FILL]
+% Decision Gates: Day 7 (Gate 1), Day 14 (Gate 2)
+% =========================================================
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm, mathtools}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\newcommand{\TODO}[1]{{\color{red}\textbf{[FILL: #1]}}}
+\newcommand{\NOTE}[1]{{\color{blue}\textit{[Note: #1]}}}
+\newcommand{\REF}[1]{{\color{teal}\textsf{[Ref: #1]}}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{remark}{Remark}
+
+\DeclareMathOperator{\TV}{TV}
+\DeclareMathOperator{\KL}{KL}
+\DeclareMathOperator{\negl}{negl}
+\DeclareMathOperator{\Adv}{Adv}
+\DeclareMathOperator{\Pa}{Pa}
+\DeclareMathOperator{\Ch}{Ch}
+\DeclareMathOperator{\do}{do}
+
+\title{Theorem 2 (Impossibility) Proof Skeleton:\\
+       \large No Double-Sided Bounded Do-Intervention without a Cryptographically-Isolated Trust Anchor}
+\author{PrecedentGuard --- AAAI 2027 Submission Draft}
+\date{2026-06-30}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Preliminaries and Notation}
+% =========================================================
+
+\subsection{Causal Influence Diagram for an Agent Trajectory}
+
+\begin{definition}[Causal Influence Diagram, CID]\label{def:cid}
+A \emph{Causal Influence Diagram} for an LLM agent trajectory is a tuple
+$\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathcal{T})$ where
+$\mathcal{V}$ is a finite set of nodes,
+$\mathcal{E} \subseteq \mathcal{V}\times\mathcal{V}$ is a set of directed edges,
+and $\mathcal{T}: \mathcal{V} \to \{\textsc{Intent}, \textsc{Memory}, \textsc{Tool}, \textsc{Obs}, \textsc{Decision}, \textsc{Utility}\}$
+is a node-type assignment. We write $\Pa(v)$ for the parent set of node $v\in\mathcal{V}$
+and $\Ch(v)$ for its child set.
+\end{definition}
+
+\REF{Everitt et al.\ 2021, Synthese; Pearl 2009 \S 1.2.}
+
+\begin{remark}\label{rem:dnodes}
+Within a single trajectory, the \emph{decision node} $D\in\mathcal{V}$ is the
+guard's binary output $D \in \{\textsc{allow}, \textsc{block}\}$. The \emph{utility node}
+$U$ encodes the safety-correctness label (1 if the underlying trajectory is
+actually unsafe, 0 if safe).
+\end{remark}
+
+\subsection{Memory Augmentation and the Precedent Tuple}
+
+\begin{definition}[Precedent Tuple]\label{def:precedent}
+Each retrievable precedent is a five-tuple
+$E_i = (M_i, G_i, T_i, L_i, C_i)$, where
+$M_i \in \mathbb{R}^{d_M}$ is a dense semantic vector,
+$G_i$ is a typed causal sub-graph,
+$T_i$ is a timestamp,
+$L_i \in \{0,1\}^*$ is a (possibly empty) cryptographically signed audit rule,
+and $C_i \in \{0,1\}$ is a binary safety label.
+We partition $E_i$ into two tiers:
+the \emph{poisonable tier} $\Pi_{\mathrm{P}}(E_i) := \{M_i, G_i, T_i, C_i\}$
+and the \emph{signed tier} $\Pi_{\mathrm{S}}(E_i) := \{L_i\}$.
+\end{definition}
+
+\subsection{Bounded Do-Intervention Scheme}
+
+\begin{definition}[Bounded Do-Intervention Scheme]\label{def:bdis}
+A \emph{bounded do-intervention scheme} is a tuple
+$\Pi = (R, \Phi, \varepsilon)$, where
+\begin{itemize}[noitemsep]
+  \item $R: \mathcal{X} \times \mathcal{B} \to \mathcal{B}^K$ is a retrieval map
+        from query trajectory and memory bank to a top-$K$ retrieved set;
+  \item $\Phi: \mathcal{B}^K \times \mathbb{R}^{|D|} \to \mathbb{R}^{|D|}$
+        is a logit perturbation map applied to a frozen guard
+        $f_\theta: \mathcal{X} \to \mathbb{R}^{|D|}$;
+  \item $\varepsilon > 0$ is a perturbation budget with the constraint
+        $\|\Phi(\cdot,\cdot)\|_\infty \le \varepsilon$.
+\end{itemize}
+The guard's decision under $\Pi$ is
+$D_\Pi(x) = \arg\max_k \bigl[f_\theta(x) + \Phi(R(x), f_\theta(x))\bigr]_k$.
+\end{definition}
+
+% =========================================================
+\section{Threat Model}\label{sec:threat}
+% =========================================================
+
+\begin{definition}[Adversary $\mathcal{A}_{p, K}$]\label{def:adversary}
+An \emph{intervention adversary} $\mathcal{A}_{p, K}$ is permitted to apply
+\emph{do-operations} on at most $K$ causal-parent nodes of $D$
+within a poisoning budget $p \in [0,1]$, where $p$ is the maximum fraction
+of poisonable-tier content the adversary may corrupt.
+\end{definition}
+
+\begin{assumption}[No-trust-anchor setting]\label{ass:notrust}
+The adversary has access only to the poisonable tier $\Pi_{\mathrm{P}}(E_i)$
+and has no signing key. The defender, in the \emph{no-trust-anchor setting},
+does not consult $\Pi_{\mathrm{S}}(E_i)$ when forming $\Phi$
+(equivalently, $L_i$ does not influence the perturbation map).
+\end{assumption}
+
+\NOTE{This is the load-bearing condition for Theorem~2. It captures
+the regime where the defender lacks a verifiable, unforgeable signal.}
+
+\begin{definition}[FNR/FPR of $\Pi$]\label{def:fnrfpr}
+Let $\mathcal{D}$ be the trajectory distribution. The false-negative and
+false-positive rates of $\Pi$ are
+\[
+  \mathrm{FNR}(\Pi) = \Pr_{x\sim\mathcal{D}}\bigl[D_\Pi(x) = \textsc{allow} \mid U(x) = 1\bigr],
+\quad
+  \mathrm{FPR}(\Pi) = \Pr_{x\sim\mathcal{D}}\bigl[D_\Pi(x) = \textsc{block} \mid U(x) = 0\bigr].
+\]
+\end{definition}
+
+% =========================================================
+\section{Theorem 2 (Impossibility) --- Statement}
+% =========================================================
+
+\begin{theorem}[Impossibility of Double-Sided Bounded Do-Intervention]\label{thm:impossibility}
+Let $\mathcal{G}$ be a Causal Influence Diagram satisfying Definition~\ref{def:cid},
+and let $\Pi = (R, \Phi, \varepsilon)$ be any bounded do-intervention scheme
+under Assumption~\ref{ass:notrust} (no-trust-anchor setting).
+For any $\delta < 1/2$, no $\Pi$ can simultaneously satisfy
+\[
+  \mathrm{FNR}(\Pi) \le \delta \quad \text{and} \quad \mathrm{FPR}(\Pi) \le \delta
+\]
+against an adversary $\mathcal{A}_{p, K}$ with $p \cdot K \ge p_*$,
+where $p_*$ is a constructive threshold defined in the proof.
+\end{theorem}
+
+\begin{remark}
+The constant $p_*$ depends on $K$, the embedding dimension $d_M$,
+and the structure of the retrieval map $R$. \TODO{Provide explicit
+formula for $p_*$ once the construction in Lemma~\ref{lem:construct} is filled in.}
+\end{remark}
+
+% =========================================================
+\section{Supporting Lemmas}
+% =========================================================
+
+\subsection{Lemma 1 --- Existence of Indistinguishable Intervention Pair}
+
+\begin{lemma}[Adversarial Indistinguishable Construction]\label{lem:construct}
+Under Assumption~\ref{ass:notrust}, there exist two trajectories $x_1, x_2$
+and a do-intervention $\nu \in \mathcal{A}_{p, K}$ such that
+\begin{enumerate}[label=(\roman*), noitemsep]
+  \item $U(x_1) = 0$ (safe ground truth) and $U(x_2) = 1$ (unsafe ground truth);
+  \item the retrieved top-$K$ sets satisfy
+        $R(x_1) \overset{d}{=} R(\nu(x_2))$ as distributions
+        on the retrieval space;
+  \item the perturbation map $\Phi$ takes input distributions only,
+        so $\Phi(R(x_1), \cdot) \overset{d}{=} \Phi(R(\nu(x_2)), \cdot)$.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}[Proof sketch]
+\TODO{Construct $x_2$ as an unsafe trajectory whose natural memory pool
+$\mathcal{B}_2$ contains $K$ items semantically distant from $x_1$'s
+natural retrieved set. Then let the adversary inject $K$ crafted items
+into $\mathcal{B}_2$ such that retrieval similarity to $x_1$'s top-$K$
+is maximized.}
+
+\TODO{Argue that under the retrieval map's continuity (Lipschitz or
+nearest-neighbor), the resulting retrieved set is identically distributed
+to $R(x_1)$. Use the embedding-space Voronoi argument from \REF{Bhagoji et al.\ 2018, NeurIPS} (\S 3.1)
+adapted to typed-set similarity.}
+
+\TODO{Bound the required injection size: $K_{\mathrm{inject}} \le K$, which
+holds whenever $p \cdot |\mathcal{B}_2| \ge K$, giving the threshold
+$p_* = K / |\mathcal{B}_2|$.}
+\end{proof}
+
+\subsection{Lemma 2 --- Decision-Coincidence under Indistinguishability}
+
+\begin{lemma}[Decision Coincidence]\label{lem:coincide}
+Let $\Pi = (R, \Phi, \varepsilon)$ be any bounded do-intervention scheme
+under Assumption~\ref{ass:notrust}. For the $x_1, x_2, \nu$ given by
+Lemma~\ref{lem:construct},
+\[
+  D_\Pi(x_1) = D_\Pi(\nu(x_2))
+  \quad\text{with probability 1.}
+\]
+\end{lemma}
+
+\begin{proof}[Proof sketch]
+\TODO{Since $R(x_1) \overset{d}{=} R(\nu(x_2))$ and $\Phi$ depends on $R$ only
+(no signed $L_i$ access by Assumption~\ref{ass:notrust}),
+$\Phi(R(x_1), \cdot) \overset{d}{=} \Phi(R(\nu(x_2)), \cdot)$.}
+
+\TODO{The frozen guard $f_\theta$ is a deterministic function of the
+trajectory's text representation. Argue that on $x_1$ and $\nu(x_2)$
+the text representation of the retrieved memory chunk fed back into
+the guard input is identical (or has identical distribution).}
+
+\TODO{Therefore $\arg\max_k [f_\theta + \Phi]_k$ yields the same decision.}
+\end{proof}
+
+\begin{remark}
+Lemma~\ref{lem:coincide} is the load-bearing step. It transforms a
+\emph{statistical} indistinguishability (Lemma~\ref{lem:construct})
+into a \emph{decision-level} coincidence.
+\end{remark}
+
+\subsection{Lemma 3 --- Lower Bound on the Maximum of FNR and FPR}
+
+\begin{lemma}[Maximum-Error Lower Bound]\label{lem:lowerbound}
+Under the conditions of Lemmas~\ref{lem:construct}--\ref{lem:coincide},
+\[
+  \max\bigl(\mathrm{FNR}(\Pi), \mathrm{FPR}(\Pi)\bigr) \ge \frac{1}{2}.
+\]
+\end{lemma}
+
+\begin{proof}[Proof sketch]
+\TODO{By Lemma~\ref{lem:coincide}, $\Pi$ outputs the same decision on
+$x_1$ (safe) and $\nu(x_2)$ (unsafe). Without loss of generality,
+denote this common decision $d^\star$.}
+
+\TODO{If $d^\star = \textsc{allow}$, then on $\nu(x_2)$ we have
+$D_\Pi = \textsc{allow}$ while $U = 1$ --- a false negative event.}
+
+\TODO{If $d^\star = \textsc{block}$, then on $x_1$ we have
+$D_\Pi = \textsc{block}$ while $U = 0$ --- a false positive event.}
+
+\TODO{Mix over the joint distribution of $(x_1, x_2)$ in the
+adversary's strategy: at least one of FNR or FPR exceeds $1/2$
+because the constructed pair contributes equally to both rates
+under a balanced reduction.}
+
+\REF{This argument follows the Bayes-error / minimax structure of
+\REF{Tsipras et al.\ 2019, ICLR} \S 3 and the indistinguishability
+arguments of \REF{Cohen, Rosenfeld \& Kolter 2019, ICML} \S 3.}
+\end{proof}
+
+\subsection{Lemma 4 --- Trust Anchor Restores Distinguishability}
+
+\begin{lemma}[Trust Anchor Distinguishability]\label{lem:anchor}
+Assume the signature scheme used to produce $L_i$ is
+existentially unforgeable under chosen-message attack (EUF-CMA),
+with security parameter $\lambda$.
+Then, with access to $\Pi_{\mathrm{S}}(E_i) = \{L_i\}$, the indistinguishability
+of Lemma~\ref{lem:construct} no longer holds: there is a verifier
+$V$ such that
+\[
+  \Pr\bigl[V(R(x_1)) = 1 \wedge V(R(\nu(x_2))) = 0\bigr] \ge 1 - \negl(\lambda),
+\]
+where $\negl(\lambda)$ is a function vanishing faster than any inverse polynomial.
+\end{lemma}
+
+\begin{proof}[Proof sketch]
+\TODO{The genuine precedent $E_1$ retrieved for $x_1$ carries a valid
+$L_1$ signed by the trusted authority. The adversary, lacking the
+signing key, cannot produce a $L_2'$ such that $\mathrm{Verify}(L_2', m) = 1$
+for the message $m$ corresponding to the injected memory --- except
+with probability $\negl(\lambda)$ by EUF-CMA.}
+
+\TODO{Therefore the verifier $V$ accepts $R(x_1)$ but rejects
+$R(\nu(x_2))$ with overwhelming probability, breaking the
+decision-coincidence chain of Lemma~\ref{lem:coincide}.}
+
+\REF{Standard EUF-CMA argument; see Katz \& Lindell, \textit{Introduction to
+Modern Cryptography} (3rd ed.), \S 12.4.}
+\end{proof}
+
+% =========================================================
+\section{Proof of Theorem 2}
+% =========================================================
+
+\begin{proof}[Proof of Theorem~\ref{thm:impossibility}]
+The proof proceeds in four steps, instantiating the lemmas above.
+
+\paragraph{Step 1 --- Setup.}
+Fix the no-trust-anchor setting of Assumption~\ref{ass:notrust}.
+Let $\Pi = (R, \Phi, \varepsilon)$ be an arbitrary bounded do-intervention scheme.
+
+\paragraph{Step 2 --- Construction.}
+By Lemma~\ref{lem:construct}, there exist $x_1$ (safe), $x_2$ (unsafe),
+and an adversarial intervention $\nu \in \mathcal{A}_{p, K}$ with $p \ge p_*$
+producing the indistinguishable retrieval distributions.
+
+\paragraph{Step 3 --- Decision Coincidence.}
+By Lemma~\ref{lem:coincide}, $D_\Pi(x_1) = D_\Pi(\nu(x_2))$ with probability 1.
+
+\paragraph{Step 4 --- Lower Bound.}
+By Lemma~\ref{lem:lowerbound}, $\max(\mathrm{FNR}, \mathrm{FPR}) \ge 1/2$.
+Since this contradicts any joint bound of the form
+$\mathrm{FNR} \le \delta \wedge \mathrm{FPR} \le \delta$ for $\delta < 1/2$,
+the desired impossibility follows.
+
+\paragraph{Contrast with Trust-Anchor Setting.}
+Under access to $\Pi_{\mathrm{S}}(E_i)$, Lemma~\ref{lem:anchor} restores
+distinguishability with overwhelming probability, and the double-sided
+bound of Theorem~1 becomes achievable. This establishes the trust anchor
+as \emph{necessary}, not merely sufficient.
+\qedhere
+\end{proof}
+
+% =========================================================
+\section{Corollaries (Optional, for Section 4 of Paper)}
+% =========================================================
+
+\begin{corollary}[Single-Sided Possibility under Stronger Assumption]\label{cor:single}
+\TODO{State that under bounded statistical distance (e.g.\ Lipschitz retrieval),
+a \emph{single-sided} bound (FNR only, as in SMSR) remains achievable without
+a trust anchor.}
+\end{corollary}
+
+\begin{corollary}[Threshold $p_*$ Dependence]\label{cor:threshold}
+\TODO{Express $p_*$ as a function of $K$, $|\mathcal{B}|$, and embedding-space
+geometry. Useful for empirical $p^*$ matching in \S 4.4.}
+\end{corollary}
+
+\begin{corollary}[Equivalence with the Static-Guard Limit]\label{cor:static}
+\TODO{Argue that for $K = 0$ (no memory retrieval, i.e.\ a static guard),
+the impossibility reduces to the standard Bayes-error lower bound.}
+\end{corollary}
+
+% =========================================================
+\section{Day-by-Day Task Checklist (14 Days)}
+% =========================================================
+
+\paragraph{Week 1 --- Construction and Indistinguishability}
+
+\begin{enumerate}[label=\textbf{Day \arabic*.}, leftmargin=*]
+  \item \textbf{Notation lockdown.} Finalize Definitions 1--4 with PrecedentGuard v2
+        notation. Verify no clash with existing paper.
+  \item \textbf{Threat model formalization.} Write Assumption~\ref{ass:notrust}
+        and Definition~\ref{def:adversary} in full. Identify all variables.
+  \item \textbf{Lemma 1 construction.} Construct $x_1, x_2, \nu$ on a toy CID
+        (3 memory nodes, 2 tools). Verify retrieval similarity by hand.
+  \item \textbf{Lemma 1 generalization.} Lift the toy construction to the
+        general CID. Establish $p_* = K / |\mathcal{B}_2|$.
+  \item \textbf{Lemma 1 LaTeX.} Write full proof sketch with embedding-space
+        Voronoi argument. \REF{Bhagoji 2018 \S 3.1.}
+  \item \textbf{Lemma 2 setup.} Argue $\Phi$'s dependence is only on $R(\cdot)$.
+        Show this implies $\Phi$-output coincidence.
+  \item \textbf{Gate 1 review.} Self-audit Lemmas 1--2.
+        \textbf{Decision:} are constructions sound? If not, pivot to Plan B.
+        \\\textbf{Stop-loss:} if construction fails after Day 7, drop Theorem~2 and finalize Theorem~1 + corollaries only.
+\end{enumerate}
+
+\paragraph{Week 2 --- Lower Bound, Cryptographic Step, and Verification}
+
+\begin{enumerate}[label=\textbf{Day \arabic*.}, leftmargin=*, start=8]
+  \item \textbf{Lemma 3 derivation.} Write the FNR/FPR lower-bound argument.
+        Reference \REF{Tsipras 2019 \S 3} and \REF{Cohen-Rosenfeld-Kolter 2019 \S 3}.
+  \item \textbf{Lemma 4 cryptography.} Invoke EUF-CMA for Ed25519
+        (PrecedentGuard v2's signature scheme). Cite Katz \& Lindell \S 12.4.
+  \item \textbf{Theorem 2 main proof.} Assemble Lemmas 1--4 into the four-step
+        proof. Verify each link in the chain.
+  \item \textbf{Corollary draft.} Write Corollaries 1--3.
+  \item \textbf{Internal review.} Hand the draft to one math-strong colleague
+        (or LLM self-review with adversarial prompt). Mark any unclear step.
+  \item \textbf{Revision.} Fix all flagged steps. Tighten constants.
+  \item \textbf{Gate 2 review.} Final audit.
+        \textbf{Decision:} is the proof airtight?
+        \\\textbf{Outcome A:} Theorem~2 holds $\Rightarrow$ Plan A
+        (proceed to \S 3 Method with double-theorem narrative).
+        \\\textbf{Outcome B:} Theorem~2 has fixable gap $\Rightarrow$
+        extend 1 week or downgrade to a weaker version
+        (e.g.\ ``one-sided impossibility'').
+        \\\textbf{Outcome C:} Theorem~2 fundamentally fails $\Rightarrow$
+        commit to Plan B (Theorem~1 + 3 corollaries only).
+\end{enumerate}
+
+% =========================================================
+\section{Plan B Fallback (If Theorem 2 Fails)}
+% =========================================================
+
+If Theorem~2 cannot be established by Day 14, the paper's contribution
+structure must be revised:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{C1} stays --- CID formalization is independent of Theorem~2.
+  \item \textbf{C2} weakens to \emph{Theorem~1 + 3 corollaries only}.
+  \item \textbf{C3} stays --- BDIC algorithm and empirical validation are unaffected.
+  \item \textbf{\S 2.2 SMSR critique} must change from
+        ``trust isolation is \emph{necessary}'' to
+        ``trust isolation enables a \emph{stronger} guarantee''.
+  \item \textbf{\S 3 Method} must motivate the trust anchor as an
+        engineering choice rather than a theoretical necessity.
+  \item \textbf{Target venue} may shift from AAAI 2027 to NeurIPS 2027
+        for an extra 3 months of polishing.
+\end{itemize}
+
+\textbf{Verdict path priority:} Plan A (Theorem 2 holds) $\succ$
+Plan B-strong (Theorem 2-weak: only single-direction impossibility holds) $\succ$
+Plan B (Theorem 2 fails entirely).
+
+% =========================================================
+\section{Inline References (Minimal Pre-Reading)}
+% =========================================================
+
+The proof draws on the following four results. \textbf{Read only the cited section,
+not the full paper}, unless intuition fails.
+
+\begin{enumerate}[noitemsep]
+  \item Madry, A. et al.\ (2018). \emph{Towards Deep Learning Models Resistant to
+        Adversarial Attacks}. ICLR. \textbf{\S 2 only} --- adversarial budget formalization.
+  \item Cohen, J., Rosenfeld, E., \& Kolter, J.Z.\ (2019). \emph{Certified Adversarial
+        Robustness via Randomized Smoothing}. ICML. \textbf{\S 3 only} ---
+        the certification-vs-attack indistinguishability structure.
+  \item Tsipras, D. et al.\ (2019). \emph{Robustness May Be at Odds with Accuracy}.
+        ICLR. \textbf{\S 3 only} --- impossibility-style argument with Bayes-error bound.
+  \item Bhagoji, A.N., Cullina, D., \& Mittal, P.\ (2018). \emph{Lower Bounds on Adversarial
+        Robustness from Optimal Transport}. NeurIPS. \textbf{\S 3.1 only} ---
+        embedding-space construction technique.
+\end{enumerate}
+
+\REF{Optional deeper background:} Everitt, T.\ et al.\ (2021), CID survey;
+Pearl, J.\ (2009), \textit{Causality}, \S 3.4 do-operator semantics;
+Katz, J.\ \& Lindell, Y.\ (2020), \textit{Introduction to Modern Cryptography}, \S 12 EUF-CMA.
+
+% =========================================================
+\section{Self-Review Checklist (Before Gate 2)}
+% =========================================================
+
+\begin{itemize}[label=$\Box$, noitemsep]
+  \item Definitions 1--4 are notation-compatible with PrecedentGuard v2 \S 2--3.
+  \item Assumption~\ref{ass:notrust} clearly excludes only the signed tier $L_i$.
+  \item Lemma 1's construction is concrete enough to compile a toy example in Python.
+  \item Lemma 2's argument explicitly addresses both deterministic and randomized
+        guards.
+  \item Lemma 3's $1/2$ bound is matched by a constructive adversary, not just stated.
+  \item Lemma 4's EUF-CMA invocation is rigorous (security parameter and reduction
+        sketch present).
+  \item Theorem 2's contradiction is sharp: $\max(\mathrm{FNR}, \mathrm{FPR}) \ge 1/2$
+        cannot be relaxed.
+  \item Corollary 1 is consistent with SMSR's published single-sided bound
+        (sanity check).
+  \item All three inline reference \S sections have been re-read.
+  \item One colleague has independently verified Lemmas 1--4.
+\end{itemize}
+
+\end{document}
