@@ -526,6 +526,14 @@ With probability at least \(1-\alpha\), simultaneously for all \(\gamma\in\Gamma
 
 **Remark.** This certificate is distribution-dependent through the held-out class-conditional margins and assumes the calibration and deployment distributions match for the relevant risk event. Cross-domain validity is evaluated empirically rather than silently assumed. A conformal-risk extension is future work unless completed before submission.
 
+**Remark (Sidedness of the union bound).** We use *one-sided* Hoeffding, giving the multiplier \(2\): one upper-tail deviation per class, over \(|\Gamma|\) configurations and \(|\{\mathrm{FN},\mathrm{FP}\}|=2\) classes. Only the upper-tail deviation \(R^{\star}(\gamma)\le\widehat R(\gamma)+t\) is required for a valid upper-bound certificate. The two-sided variant would replace \(2|\Gamma|\) by \(4|\Gamma|\); the ratio
+
+\[
+\frac{t_{4|\Gamma|}}{t_{2|\Gamma|}} \;=\; \sqrt{\,\frac{\log(4|\Gamma|/\alpha)}{\log(2|\Gamma|/\alpha)}\,}
+\]
+
+is independent of the calibration size \(n\) but depends on \(|\Gamma|\) and \(\alpha\). For the reference regime \((|\Gamma|,\alpha)=(20,0.05)\), the two-sided tail is \(5.06\%\) larger than the one-sided; across \((|\Gamma|,\alpha)\in\{5,10,20,50,100,500\}\times\{0.01,0.05,0.10\}\) the gap ranges from \(2.97\%\) to \(7.26\%\). The full table is reproducible from `scripts/day1_theorem_numerical_example.py`; three externally supplied reference values (5.63% / 4.09% / 2.80%) reproduce exactly. We adopt the tighter one-sided version.
+
 ### 5.5 Imperfect semantic validators
 
 Suppose a policy attestation is wrong with probability at most \(\eta\) on deployment-matched data. A conservative extension adds validator risk to the unsafe certificate:

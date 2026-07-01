@@ -255,7 +255,9 @@ def scenario_C_mixed() -> None:
 
 def compare_hoeffding_multipliers() -> None:
     print_header("Hoeffding multiplier comparison: 2|Gamma| (one-sided) vs 4|Gamma| (two-sided)")
-    print("  Purpose: quantify the tail difference to justify the recommended choice.")
+    print("  Convention: 'two-sided tail is X% larger than one-sided' = (t_4 - t_2) / t_2")
+    print("  (matches the convention used by the independent reviewer 2026-07-01).")
+    print("  Note: percentage is INDEPENDENT of n; the raw tail scales with 1/sqrt(n).")
     print()
     for n in [250, 500, 1000, 2000, 5000]:
         cfg2 = baseline_config(hoeffding_multiplier=2)
@@ -267,9 +269,76 @@ def compare_hoeffding_multipliers() -> None:
         t2 = hoeffding_tail(cfg2, n)
         t4 = hoeffding_tail(cfg4, n)
         gap = t4 - t2
-        rel = 100.0 * gap / t4 if t4 > 0 else 0.0
+        rel = 100.0 * gap / t2 if t2 > 0 else 0.0
         print(f"  n={n:>5d} | t(2|Gamma|)={_fmt(t2)} | t(4|Gamma|)={_fmt(t4)} | "
-              f"gap={_fmt(gap)} ({rel:.2f}% relative)")
+              f"gap={_fmt(gap)} ({rel:.2f}% larger)")
+    print()
+
+
+def sensitivity_grid_gamma_alpha() -> None:
+    """Grid scan of the 2|Gamma| vs 4|Gamma| tail ratio over (|Gamma|, alpha).
+
+    The ratio sqrt(log(4|Gamma|/alpha) / log(2|Gamma|/alpha)) - 1 is
+    independent of n (n cancels in the tail formula), so this table is
+    a complete summary of the sidedness cost for the reference config.
+    """
+    print_header("Sensitivity grid: (|Gamma|, alpha) -> two-sided vs one-sided tail ratio")
+    print("  Definition:  gap = t(4|Gamma|) / t(2|Gamma|) - 1")
+    print("  Reading:     'the two-sided tail is X% larger than the one-sided tail'")
+    print("  Property:    the ratio is INDEPENDENT of n and of R_hat.")
+    print()
+
+    Gamma_values = [5, 10, 20, 50, 100, 500]
+    alpha_values = [0.01, 0.05, 0.10]
+
+    header = "  |Gamma| \\ alpha" + "".join(f" | {a:>7.2f}" for a in alpha_values)
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for G in Gamma_values:
+        row = f"  |Gamma|={G:>5d}    "
+        for a in alpha_values:
+            log_4 = math.log(4 * G / a)
+            log_2 = math.log(2 * G / a)
+            ratio = math.sqrt(log_4 / log_2) - 1.0
+            row += f" | {100.0 * ratio:>6.3f}%"
+        print(row)
+    print()
+
+    print("  Markdown table (paste-ready for paper appendix or remark):")
+    print()
+    print("  | \\|Gamma\\| | alpha=0.01 | alpha=0.05 | alpha=0.10 |")
+    print("  |---|---|---|---|")
+    for G in Gamma_values:
+        row = f"  | {G} |"
+        for a in alpha_values:
+            log_4 = math.log(4 * G / a)
+            log_2 = math.log(2 * G / a)
+            ratio = math.sqrt(log_4 / log_2) - 1.0
+            row += f" {100.0 * ratio:.2f}% |"
+        print(row)
+    print()
+
+    # Reproduce the three reviewer datapoints verbatim as spot-check
+    print("  Reviewer spot-check reproduction (2026-07-01 audit report):")
+    print()
+    spot_checks = [
+        (10, 0.05, 5.63),
+        (100, 0.05, 4.09),
+        (1000, 0.01, 2.80),
+    ]
+    all_match = True
+    for G, a, expected in spot_checks:
+        log_4 = math.log(4 * G / a)
+        log_2 = math.log(2 * G / a)
+        ratio_pct = (math.sqrt(log_4 / log_2) - 1.0) * 100.0
+        match = abs(ratio_pct - expected) < 0.05
+        if not match:
+            all_match = False
+        mark = "MATCH" if match else "MISMATCH"
+        print(f"    [{mark}] (|Gamma|={G:>4d}, alpha={a:.2f}): "
+              f"reviewer reported {expected:.2f}%, script computes {ratio_pct:.3f}%")
+    print()
+    print(f"  Overall spot-check: {'PASS' if all_match else 'FAIL'}")
     print()
 
 
@@ -396,6 +465,7 @@ def main() -> None:
     scenario_B_all_unauth_insertions()
     scenario_C_mixed()
     compare_hoeffding_multipliers()
+    sensitivity_grid_gamma_alpha()
     sensitivity_scan_grid_size()
     sensitivity_scan_R_hat()
     edge_case_zero_budget()

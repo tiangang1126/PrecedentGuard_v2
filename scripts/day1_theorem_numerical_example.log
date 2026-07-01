@@ -103,13 +103,50 @@ Theorem 3 (assume R_hat_FN=0.10, R_hat_FP=0.05):
 ==============================================================================
 Hoeffding multiplier comparison: 2|Gamma| (one-sided) vs 4|Gamma| (two-sided)
 ==============================================================================
-  Purpose: quantify the tail difference to justify the recommended choice.
+  Convention: 'two-sided tail is X% larger than one-sided' = (t_4 - t_2) / t_2
+  (matches the convention used by the independent reviewer 2026-07-01).
+  Note: percentage is INDEPENDENT of n; the raw tail scales with 1/sqrt(n).
 
-  n=  250 | t(2|Gamma|)=0.115625 | t(4|Gamma|)=0.121472 | gap=0.005847 (4.81% relative)
-  n=  500 | t(2|Gamma|)=0.081759 | t(4|Gamma|)=0.085894 | gap=0.004134 (4.81% relative)
-  n= 1000 | t(2|Gamma|)=0.057813 | t(4|Gamma|)=0.060736 | gap=0.002923 (4.81% relative)
-  n= 2000 | t(2|Gamma|)=0.040880 | t(4|Gamma|)=0.042947 | gap=0.002067 (4.81% relative)
-  n= 5000 | t(2|Gamma|)=0.025855 | t(4|Gamma|)=0.027162 | gap=0.001307 (4.81% relative)
+  n=  250 | t(2|Gamma|)=0.115625 | t(4|Gamma|)=0.121472 | gap=0.005847 (5.06% larger)
+  n=  500 | t(2|Gamma|)=0.081759 | t(4|Gamma|)=0.085894 | gap=0.004134 (5.06% larger)
+  n= 1000 | t(2|Gamma|)=0.057813 | t(4|Gamma|)=0.060736 | gap=0.002923 (5.06% larger)
+  n= 2000 | t(2|Gamma|)=0.040880 | t(4|Gamma|)=0.042947 | gap=0.002067 (5.06% larger)
+  n= 5000 | t(2|Gamma|)=0.025855 | t(4|Gamma|)=0.027162 | gap=0.001307 (5.06% larger)
+
+==============================================================================
+Sensitivity grid: (|Gamma|, alpha) -> two-sided vs one-sided tail ratio
+==============================================================================
+  Definition:  gap = t(4|Gamma|) / t(2|Gamma|) - 1
+  Reading:     'the two-sided tail is X% larger than the one-sided tail'
+  Property:    the ratio is INDEPENDENT of n and of R_hat.
+
+  |Gamma| \ alpha |    0.01 |    0.05 |    0.10
+  ---------------------------------------------
+  |Gamma|=    5     |  4.897% |  6.340% |  7.262%
+  |Gamma|=   10     |  4.460% |  5.626% |  6.340%
+  |Gamma|=   20     |  4.095% |  5.057% |  5.626%
+  |Gamma|=   50     |  3.695% |  4.460% |  4.897%
+  |Gamma|=  100     |  3.440% |  4.095% |  4.460%
+  |Gamma|=  500     |  2.966% |  3.440% |  3.695%
+
+  Markdown table (paste-ready for paper appendix or remark):
+
+  | \|Gamma\| | alpha=0.01 | alpha=0.05 | alpha=0.10 |
+  |---|---|---|---|
+  | 5 | 4.90% | 6.34% | 7.26% |
+  | 10 | 4.46% | 5.63% | 6.34% |
+  | 20 | 4.09% | 5.06% | 5.63% |
+  | 50 | 3.69% | 4.46% | 4.90% |
+  | 100 | 3.44% | 4.09% | 4.46% |
+  | 500 | 2.97% | 3.44% | 3.69% |
+
+  Reviewer spot-check reproduction (2026-07-01 audit report):
+
+    [MATCH] (|Gamma|=  10, alpha=0.05): reviewer reported 5.63%, script computes 5.626%
+    [MATCH] (|Gamma|= 100, alpha=0.05): reviewer reported 4.09%, script computes 4.095%
+    [MATCH] (|Gamma|=1000, alpha=0.01): reviewer reported 2.80%, script computes 2.800%
+
+  Overall spot-check: PASS
 
 ==============================================================================
 Sensitivity: how does |Gamma| affect the tail width?

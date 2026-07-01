@@ -302,7 +302,17 @@ With probability at least $1 - \alpha$ over the draw of $C_0 \cup C_1$, simultan
 \end{theorem}
 
 \begin{remark}[Sidedness of the union bound]\label{rem:thm3-sidedness}
-We use \emph{one-sided} Hoeffding, giving the multiplier $2$ (one tail direction per class, $|\Gamma|$ configurations, $2$ classes). Only the upper-tail deviation $R^{\star}(\gamma) \le \widehat R(\gamma) + t$ is required for a valid upper-bound certificate. A conservative two-sided variant would replace $2|\Gamma|$ by $4|\Gamma|$; the numerical comparison in \texttt{scripts/day1\_theorem\_numerical\_example.py} shows the two-sided variant yields a $4.81\%$ larger tail at fixed $|\Gamma|$ and $\alpha$, independent of $n$. We adopt the tighter one-sided version and cite this remark explicitly in \S 5.4 of the main draft.
+We use \emph{one-sided} Hoeffding, giving the multiplier $2$: one upper-tail deviation per class, over $|\Gamma|$ configurations and $|\{\mathrm{FN}, \mathrm{FP}\}| = 2$ classes. Only the upper-tail deviation $R^{\star}(\gamma) \le \widehat R(\gamma) + t$ is required for a valid upper-bound certificate. A conservative two-sided variant would replace $2|\Gamma|$ by $4|\Gamma|$. The two variants differ by
+\[
+\frac{t_{4|\Gamma|}}{t_{2|\Gamma|}} \;=\; \sqrt{\,\frac{\log(4|\Gamma|/\alpha)}{\log(2|\Gamma|/\alpha)}\,},
+\]
+which is \emph{independent of the calibration size} $n$ but depends on $|\Gamma|$ and $\alpha$.
+For the reference regime $(|\Gamma|, \alpha) = (20, 0.05)$, the two-sided tail is $5.06\%$ larger than the one-sided.
+Representative values on the grid $(|\Gamma|, \alpha) \in \{5, 10, 20, 50, 100, 500\} \times \{0.01, 0.05, 0.10\}$
+range from $2.97\%$ (at $|\Gamma|=500, \alpha=0.01$) to $7.26\%$ (at $|\Gamma|=5, \alpha=0.10$);
+the full table is reproducible from \texttt{scripts/day1\_theorem\_numerical\_example.py}
+(saved output: \texttt{scripts/day1\_theorem\_numerical\_example.log}, which also reproduces three externally supplied reference values as a spot-check).
+We adopt the tighter one-sided version and cite this remark explicitly in \S 5.4 of the main draft.
 \end{remark}
 
 \subsection{Proof of Theorem 3}
