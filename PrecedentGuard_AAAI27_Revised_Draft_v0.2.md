@@ -551,7 +551,7 @@ with a corresponding term for FPR if incorrect attestations can increase risk. T
 
 The original paper plan proposed a universal impossibility theorem based on the absence of a cryptographic anchor. That claim is too broad: a guard may classify perfectly from another uncorrupted variable. The correct obstruction is lack of label-separating information.
 
-Let \(Q_1\) and \(Q_0\) be the attacked observable distributions for unsafe and safe decisions. For any deterministic or randomized guard \(h\), binary hypothesis-testing theory gives:
+**Measurable setup.** Let \((\Omega, \mathcal{F}, \Pr)\) carry the input \(X\), the label \(Y\in\{0,1\}\), and any adversary randomness. Let \(O:\Omega\to\mathcal{Y}\) be a measurable observation channel emitting the sub-\(\sigma\)-algebra \(\sigma(O)\subseteq\mathcal{F}\) visible to a binary guard \(h:\mathcal{Y}\to\{0,1\}\); \(h\) is \(\sigma(O)\)-measurable. The attacker \(a\) is a Markov kernel (possibly randomized) from \(\mathcal{X}\) to \(\mathcal{X}\), applied before observation. Define \(Q_y := \operatorname{Law}(O(a(X))\mid Y=y)\) for \(y\in\{0,1\}\), the pushforward distributions on \(\sigma(O)\). Under this setup, \(\operatorname{FNR}(h)=\Pr_{Q_1}[h=0]\) and \(\operatorname{FPR}(h)=\Pr_{Q_0}[h=1]\).
 
 **Proposition 1 (Double-Sided Indistinguishability Lower Bound).**
 

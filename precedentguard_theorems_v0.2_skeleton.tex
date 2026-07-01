@@ -196,6 +196,18 @@ r_+(\mathbf m) = \sum_k m_k \Delta_k,
 r_-(\mathbf m) = \sum_k \big(m_k - m_k^{\mathrm{ins,unattested}}\big)\Delta_k.
 \]
 
+\paragraph{Step 4$'$ (worst-case attacker allocation).}
+The expression $r_-(\mathbf m)$ is monotone decreasing in $m_k^{\mathrm{ins,unattested}}$:
+each unauthenticated insertion swapped in place of a replacement or attested deletion
+strictly reduces the downward-shift budget by $\Delta_k$ (Step~2). An adversary
+maximizing the downward shift therefore selects $m_k^{\mathrm{ins,unattested}} = 0$
+for all $k$, yielding the loosest form $r_-(\mathbf m) = \sum_k m_k \Delta_k$;
+the coupled attack combining insertions with deletions or replacements cannot beat
+this worst-case allocation for the defender. The refined form
+$r_-(\mathbf m) = \sum_k (m_k - m_k^{\mathrm{ins,unattested}}) \Delta_k$ is a
+strictly tighter bound available only when the defender can \emph{enforce or observe}
+a positive unauthenticated-insertion sub-budget (e.g., through provenance auditing).
+
 \paragraph{Step 5 (effect of the outer clip).}
 The outer clip $C(z) = \clip(z,\ -\varepsilon_-,\ \varepsilon_+)$ is $1$-Lipschitz and monotone:
 for any $z_1, z_2$, $|C(z_1) - C(z_2)| \le |z_1 - z_2|$, and $C$ preserves order.
@@ -342,7 +354,7 @@ By Hoeffding's inequality (one-sided),
 \Pr\!\Big(R_{\mathrm{FN}}^{\star}(\gamma) - \widehat R_{\mathrm{FN}}(\gamma) > t\Big)
    \ \le\ \exp(-2 n_1 t^2),
 \]
-\REF{Hoeffding 1963; van der Vaart \emph{Asymptotic Statistics}, Lemma 2.2.7.}
+\REF{Hoeffding 1963, \emph{J.\ Amer.\ Statist.\ Assoc.}, Theorem 2; Boucheron, Lugosi \& Massart 2013, \emph{Concentration Inequalities}, Theorem 2.8.}
 
 Apply a union bound over $\Gamma$ and over both classes.
 By Assumption~\ref{a5}, $\Gamma$ is fixed before observing $C_0 \cup C_1$, so the $N$ tail events below are legitimate targets for a union bound.
@@ -384,30 +396,44 @@ which prevents post-hoc grid selection from silently breaking the union bound.
 \end{remark}
 
 \begin{remark}[Conformal-risk-control as a stronger alternative]
-A conformal-risk-control variant (\REF{Angelopoulos \& Bates 2023, NeurIPS}) gives marginal guarantees without
-finite-grid union-bound losses. The paper defers this extension; \TODO{decide whether to include a
-half-paragraph mention in \S 5.4 Remark.}
+A conformal-risk-control variant (\REF{Angelopoulos, Bates, Fisch, Lei \& Schuster 2024, \emph{ICLR}; arXiv:2208.02814}) gives marginal guarantees without finite-grid union-bound losses. This paper defers the conformal extension to future work; a one-line pointer in \S 5.4 of the main draft is retained for the reader.
 \end{remark}
 
 % =========================================================
 \section{Proposition 1: TV-Indistinguishability Lower Bound}
 % =========================================================
 
-For a fixed deployment context, let $Q_1$ and $Q_0$ denote the (attacked) observable distributions of guard
-\emph{inputs} for unsafe and safe decisions respectively. Here ``observable'' means the runtime evidence
-the guard $h$ receives, including all evidence-channel signals available to $h$.
+\subsection{Measurable setup}\label{sec:prop1-setup}
+
+Let $(\Omega, \mathcal{F}, \Pr)$ be the underlying probability space carrying the input $X$,
+the label $Y \in \{0, 1\}$, and any adversary randomness.
+Let $O: \Omega \to \mathcal{Y}$ be a measurable \emph{observation channel} emitting the
+sub-$\sigma$-algebra $\sigma(O) \subseteq \mathcal{F}$ that is visible to a binary guard
+$h: \mathcal{Y} \to \{0, 1\}$; in particular, $h$ is a $\sigma(O)$-measurable function.
+The attacker $a$ is a Markov kernel (possibly randomized) from $\mathcal{X}$ to $\mathcal{X}$,
+applied before observation. Define
+\[
+Q_y \;:=\; \operatorname{Law}\!\big(O(a(X)) \,\big|\, Y = y\big)
+\qquad (y \in \{0, 1\}),
+\]
+the pushforward distributions on $\sigma(O)$. Under this setup,
+\[
+\mathrm{FNR}(h) \;=\; \Pr_{Q_1}\!\big[h = 0\big],
+\qquad
+\mathrm{FPR}(h) \;=\; \Pr_{Q_0}\!\big[h = 1\big].
+\]
 
 \begin{proposition}[Double-Sided Indistinguishability Lower Bound]\label{prop:1}
-For any (deterministic or randomized) binary guard $h$,
+For any (deterministic or randomized) binary guard $h$ that is $\sigma(O)$-measurable,
 \[
-\mathrm{FNR}(h) + \mathrm{FPR}(h) \ \ge\ 1 - \TV(Q_1,\ Q_0),
+\mathrm{FNR}(h) + \mathrm{FPR}(h) \;\ge\; 1 - \TV(Q_1, Q_0),
 \]
 and hence
 \[
-\max\!\big\{\mathrm{FNR}(h),\ \mathrm{FPR}(h)\big\} \ \ge\ \frac{1 - \TV(Q_1,\ Q_0)}{2}.
+\max\!\big\{\mathrm{FNR}(h),\ \mathrm{FPR}(h)\big\} \;\ge\; \frac{1 - \TV(Q_1, Q_0)}{2}.
 \]
-In particular, if $Q_1 = Q_0$, at least one of $\mathrm{FNR}$ or $\mathrm{FPR}$ is at least $1/2$.
-\end{proposition}
+In particular, if $Q_1 = Q_0$, at least one of $\mathrm{FNR}(h)$ or $\mathrm{FPR}(h)$ is at least $1/2$.
+\end{proposition>
 
 \subsection{Proof of Proposition 1}
 
@@ -418,8 +444,7 @@ or $Q_0$ (safe), outputs a binary decision. The minimum possible sum of type-I a
 \[
 \inf_h \Big(\Pr_{Q_1}[h = 0] + \Pr_{Q_0}[h = 1]\Big) = 1 - \TV(Q_1, Q_0)
 \]
-by Le~Cam's two-point inequality \REF{Le Cam 1986, \emph{Asymptotic Methods in Statistical Decision Theory},
-Theorem 2.2}. Hence every binary guard $h$ satisfies
+by Le~Cam's two-point inequality \REF{Tsybakov 2009, \emph{Introduction to Nonparametric Estimation}, Theorem 2.2 (standard textbook form); original: Le Cam 1986, \emph{Asymptotic Methods in Statistical Decision Theory}}. The infimum is attained by the Neyman--Pearson test between $Q_1$ and $Q_0$. Hence every $\sigma(O)$-measurable binary guard $h$ satisfies
 \[
 \mathrm{FNR}(h) + \mathrm{FPR}(h) = \Pr_{Q_1}[h = 0] + \Pr_{Q_0}[h = 1] \ge 1 - \TV(Q_1, Q_0).
 \]
@@ -458,8 +483,16 @@ content, cannot break indistinguishability.
 \end{corollary}
 
 \begin{proof}
-The bound in Proposition~\ref{prop:1} is monotone in the TV distance of the observation channel.
-If extending the channel from $O$ to $(O, Z)$ does not increase TV, the bound is unchanged.
+Marginalization from $(O, Z)$ back to $O$ is a deterministic channel, hence a valid (deterministic) randomization.
+By the data-processing inequality for total variation
+\REF{Polyanskiy \& Wu 2024, \emph{Information Theory: From Coding to Learning}, Ch.~7; Cover \& Thomas 2006, \emph{Elements of Information Theory}, Ch.~2},
+\[
+\TV\!\big(Q_1^{O,Z}, Q_0^{O,Z}\big) \;\ge\; \TV\!\big(Q_1^{O}, Q_0^{O}\big).
+\]
+The bound in Proposition~\ref{prop:1} is monotone decreasing in the TV distance of the observation channel;
+therefore, if extending the channel from $O$ to $(O, Z)$ does not \emph{strictly} increase TV, the lower bound on
+$\mathrm{FNR}(h) + \mathrm{FPR}(h)$ is unchanged. A sufficient condition for equality is $Z \perp Y \mid O$
+(the appended variable is conditionally independent of the label given the existing observation).
 \end{proof}
 
 \NOTE{This formalizes why \S 1.2 of v0.2 distinguishes \emph{authenticity}
@@ -518,7 +551,7 @@ By 18:00 you should have:
 
 \begin{enumerate}[label=$\Box$, leftmargin=*, noitemsep]
 \item Notation in this skeleton matches v0.2 main draft \S 3 \emph{exactly} (any divergence is corrected before Gate $\alpha$).
-\item Assumptions \ref{a1}--\ref{a4} are quoted verbatim from v0.2 \S 5.1.
+\item Assumptions \ref{a1}--\ref{a5} are quoted verbatim from v0.2 \S 5.1 (A5 added 2026-07-01 to formalize grid pre-commitment).
 \item Theorem 1's directional refinement (Step 2) is consistent with the implementation of
 $\tilde\delta_e^{\mathrm{PG}} = \max(0, \tilde\delta_e)$ under $\attested = 0$.
 \item Theorem 2's containment $\{\hat Y = 0, Y = 1\} \subseteq \{M_1 \le \rho_-\}$ is established
@@ -543,7 +576,7 @@ sprint blocker, not a polish item.}
 actual implementation):} Revert to the symmetric bound $\rho_{\mathrm{sym}} = \min(\varepsilon_-+\varepsilon_+,\ \sum_k m_k \Delta_k)$
 and lose the asymmetric narrative.
 \item \textbf{If Theorem 3's calibration assumption fails (e.g., $\Gamma$ depends on $C_0 \cup C_1$):}
-Apply a holdout split or conformal-risk-control variant. \REF{Angelopoulos \& Bates 2023.}
+Apply a holdout split or conformal-risk-control variant. \REF{Angelopoulos, Bates, Fisch, Lei \& Schuster 2024, ICLR; arXiv:2208.02814.}
 \item \textbf{If Proposition 1's TV bound is contested by a reviewer:} It is Le Cam's two-point inequality.
 Cite Tsybakov 2009 \emph{Introduction to Nonparametric Estimation}, Theorem 2.2, as a textbook source.
 \end{itemize}
