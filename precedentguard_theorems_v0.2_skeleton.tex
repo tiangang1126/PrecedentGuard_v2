@@ -95,7 +95,7 @@ M_1(x) = S(x) - \theta \quad (Y = 1, \text{unsafe}),
 M_0(x) = \theta - S(x) \quad (Y = 0, \text{safe}).
 \]
 
-\subsection{Assumptions (A1--A4, v0.2 \S 5.1)}
+\subsection{Assumptions (A1--A5, v0.2 \S 5.1)}
 
 \begin{assumption}[Execution-graph fidelity]\label{a1}
 Every mutable evidence item that enters $S_{\mathrm{PG}}$ is represented by an
@@ -116,6 +116,16 @@ replacements explicitly. A replacement counts as one modified node.
 For the primary certificate, the adversary cannot forge or improperly obtain a policy attestation.
 Authenticated but semantically unauthorized writes remain in the threat model.
 Sensitivity to attestation error $\eta$ is treated in \S 5.5 of the main paper.
+\end{assumption}
+
+\begin{assumption}[Grid pre-commitment]\label{a5}
+The configuration grid $\Gamma$ is fixed \emph{before} any calibration example
+in $C_0 \cup C_1$ is observed. In particular, $\Gamma$ is not chosen by minimizing
+$\widehat R_{\mathrm{FN}}(\gamma)$ or $\widehat R_{\mathrm{FP}}(\gamma)$ over calibration data.
+In implementation, a hash of $\Gamma$ is committed to the experiment registry
+(\texttt{experiments/registry.csv}) before the calibration split $C_0 \cup C_1$ is instantiated.
+This assumption is required for the union bound in Theorem~\ref{thm:3};
+Theorems~\ref{thm:1}--\ref{thm:2} do not depend on it.
 \end{assumption}
 
 \NOTE{These assumptions are visible deployment conditions, not universal claims.}
@@ -290,7 +300,7 @@ examples, respectively. For a configuration $\gamma = (\theta, \mathbf c, \varep
 Let $\Gamma$ be the (finite) grid of configurations under consideration.
 
 \begin{theorem}[Finite-Sample Double-Sided Certificate]\label{thm:3}
-With probability at least $1 - \alpha$ over the draw of $C_0 \cup C_1$, simultaneously for all $\gamma \in \Gamma$,
+Under Assumptions~\ref{a1}--\ref{a5}, with probability at least $1 - \alpha$ over the draw of $C_0 \cup C_1$, simultaneously for all $\gamma \in \Gamma$,
 \[
 \sup_{a \in \mathcal A(\mathbf m)} \mathrm{FNR}(a)
    \ \le\ \widehat R_{\mathrm{FN}}(\gamma) + \sqrt{\frac{\log(2|\Gamma|/\alpha)}{2 n_1}},
@@ -334,8 +344,9 @@ By Hoeffding's inequality (one-sided),
 \]
 \REF{Hoeffding 1963; van der Vaart \emph{Asymptotic Statistics}, Lemma 2.2.7.}
 
-Apply a union bound over $\Gamma$ and over both classes. Let $N = 2 |\Gamma|$
-(one-sided Hoeffding per class, over $|\Gamma|$ configurations $\times\ 2$ classes; see Remark~\ref{rem:thm3-sidedness}).
+Apply a union bound over $\Gamma$ and over both classes.
+By Assumption~\ref{a5}, $\Gamma$ is fixed before observing $C_0 \cup C_1$, so the $N$ tail events below are legitimate targets for a union bound.
+Let $N = 2 |\Gamma|$: one upper-tail deviation per class, $|\Gamma|$ configurations times $|\{\mathrm{FN}, \mathrm{FP}\}| = 2$ classes; see Remark~\ref{rem:thm3-sidedness}.
 Set
 \[
 t = \sqrt{\frac{\log(N/\alpha)}{2 n_{\min}}} \quad \text{with } n_{\min} = \min(n_0, n_1),
@@ -366,8 +377,10 @@ Cross-domain validity must be evaluated empirically (\S 6.5 of v0.2).
 
 \begin{remark}[Independence of calibration and test]
 The proof assumes $C_0$ and $C_1$ are drawn independently from the unsafe and safe class populations,
-and that $\gamma$ is selected on a separate development split. \TODO{Confirm in implementation that the
-configuration grid $\Gamma$ is fixed \emph{before} touching $C_0 \cup C_1$.}
+and that $\gamma$ is selected on a separate development split.
+$\Gamma$-independence of the calibration data is now formally enforced by Assumption~\ref{a5} (grid pre-commitment):
+the implementation logs a hash of $\Gamma$ in \texttt{experiments/registry.csv} before the calibration split $C_0 \cup C_1$ is instantiated,
+which prevents post-hoc grid selection from silently breaking the union bound.
 \end{remark}
 
 \begin{remark}[Conformal-risk-control as a stronger alternative]
@@ -510,7 +523,7 @@ By 18:00 you should have:
 $\tilde\delta_e^{\mathrm{PG}} = \max(0, \tilde\delta_e)$ under $\attested = 0$.
 \item Theorem 2's containment $\{\hat Y = 0, Y = 1\} \subseteq \{M_1 \le \rho_-\}$ is established
 without invoking measure-theoretic regularity (only standard probability).
-\item Theorem 3's calibration set $C_0 \cup C_1$ is provably independent of the configuration grid $\Gamma$.
+\item Theorem 3 invokes Assumption~\ref{a5} (grid pre-commitment); the implementation logs a $\Gamma$ hash in \texttt{experiments/registry.csv} that predates the calibration split.
 \item Theorem 3's constant ($2|\Gamma|$ vs $4|\Gamma|$) is consistent throughout the paper.
 \item Proposition 1's Le~Cam citation is verified (Le Cam 1986 or Tsybakov 2009, chosen consistently).
 \item Corollary 1's monotonicity in TV is correctly invoked (no hidden randomization assumption).

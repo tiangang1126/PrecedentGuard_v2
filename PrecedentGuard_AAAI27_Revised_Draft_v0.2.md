@@ -411,6 +411,8 @@ Latency is reported at median, P90, and P95, together with GPU memory and token 
 
 **Assumption A4: Attestation boundary.** The primary certificate assumes the adversary cannot forge or incorrectly obtain a policy attestation. Authenticated but semantically unauthorised writes remain within the threat model. A stronger certificate with validator error \(\eta\) is discussed in Section 5.5.
 
+**Assumption A5: Grid pre-commitment.** The configuration grid \(\Gamma\) is fixed *before* any calibration example in \(C_0 \cup C_1\) is observed. In particular, \(\Gamma\) is not chosen by minimizing \(\widehat R_{\mathrm{FN}}(\gamma)\) or \(\widehat R_{\mathrm{FP}}(\gamma)\) over calibration data; a hash of \(\Gamma\) is committed to the experiment registry before the calibration split is instantiated. This assumption is required for the union bound in Theorem 3; Theorems 1–2 do not depend on it.
+
 These assumptions are visible deployment conditions, not claims about arbitrary LLM-agent systems.
 
 ### 5.2 Directional intervention sensitivity
@@ -504,7 +506,7 @@ Let \(C_1\) and \(C_0\) be independent held-out calibration subsets with \(n_1\)
 Configurations are selected from a finite grid \(\Gamma\) using a separate development set. Alternatively, if the calibration set is used to choose among \(|\Gamma|\) candidates, a union-bound correction is applied.
 
 **Theorem 3 (Finite-Sample Double-Sided Certificate).**  
-With probability at least \(1-\alpha\), simultaneously for all \(\gamma\in\Gamma\),
+Under Assumptions A1–A5, with probability at least \(1-\alpha\), simultaneously for all \(\gamma\in\Gamma\),
 
 \[
 \sup_{a\in\mathcal A(\mathbf m)}\operatorname{FNR}(a)
