@@ -10,7 +10,14 @@
       "Bash(python -m unittest tests.test_eig -v)",
       "Bash(python -m unittest tests.test_counterfactual -v)",
       "Bash(python -m unittest tests -v)",
-      "Bash(python -m unittest discover -s tests -v)"
+      "Bash(python -m unittest discover -s tests -v)",
+      "Bash(python -m unittest tests.test_guard -v)",
+      "Bash(python -m unittest tests.test_certificate -v)",
+      "Bash(mkdir -p experiments)",
+      "Bash(python scripts/day3_end_to_end_smoke.py)",
+      "Bash(tee experiments/day3_smoke.log)",
+      "Bash(PYTHONPATH=. python scripts/day3_end_to_end_smoke.py)",
+      "Bash(PYTHONPATH=. python -m unittest discover -s tests)"
     ]
   }
 }
