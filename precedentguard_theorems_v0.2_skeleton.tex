@@ -405,23 +405,29 @@ A conformal-risk-control variant (\REF{Angelopoulos, Bates, Fisch, Lei \& Schust
 
 \subsection{Measurable setup}\label{sec:prop1-setup}
 
-Let $(\Omega, \mathcal{F}, \Pr)$ be the underlying probability space carrying the input $X$,
-the label $Y \in \{0, 1\}$, and any adversary randomness.
-Let $O: \Omega \to \mathcal{Y}$ be a measurable \emph{observation channel} emitting the
-sub-$\sigma$-algebra $\sigma(O) \subseteq \mathcal{F}$ that is visible to a binary guard
-$h: \mathcal{Y} \to \{0, 1\}$; in particular, $h$ is a $\sigma(O)$-measurable function.
-The attacker $a$ is a Markov kernel (possibly randomized) from $\mathcal{X}$ to $\mathcal{X}$,
-applied before observation. Define
+Let $(\Omega, \mathcal{F}, \Pr)$ be the underlying probability space carrying the input $X: \Omega \to \mathcal{X}$, the label $Y: \Omega \to \{0, 1\}$, and an adversary randomization source $U_{\mathrm{adv}}$.
+Let $(\mathcal{Y}, \mathcal{B}_\mathcal{Y})$ be the observation space equipped with its Borel $\sigma$-algebra, and let $O: \Omega \to \mathcal{Y}$ be a measurable observation channel available to the guard.
+A binary guard is a Borel-measurable function $h: \mathcal{Y} \to \{0, 1\}$; the composite $h \circ O$ is $\sigma(O)$-measurable on $\Omega$.
+The attacker is a Markov kernel $a: \mathcal{X} \times \sigma(U_{\mathrm{adv}}) \to \mathcal{X}$ (i.e., possibly randomized).
+
+\begin{assumption}[Label-oblivious adversary; primary version]\label{a:adv-oblivious}
+$U_{\mathrm{adv}} \perp Y \mid X$. The attacker's randomization is conditionally independent of the safety label given the input; equivalently, the attacker does not observe $Y$.
+\end{assumption}
+
+\NOTE{A label-aware variant, in which $a$ may depend on $Y$, yields the same Proposition 1 form but with a tighter constant on the achievability side; we retain Assumption~\ref{a:adv-oblivious} as the primary version and discuss the label-aware case in the appendix.}
+
+Under Assumption~\ref{a:adv-oblivious}, define the attacked observable distributions as probability measures on $(\mathcal{Y}, \mathcal{B}_\mathcal{Y})$:
 \[
-Q_y \;:=\; \operatorname{Law}\!\big(O(a(X)) \,\big|\, Y = y\big)
-\qquad (y \in \{0, 1\}),
+Q_y(B) \;:=\; \Pr\!\big(O(a(X, U_{\mathrm{adv}})) \in B \,\big|\, Y = y\big),
+\qquad B \in \mathcal{B}_\mathcal{Y},\ y \in \{0, 1\}.
 \]
-the pushforward distributions on $\sigma(O)$. Under this setup,
+The false-negative and false-positive rates of $h$ decompose as
 \[
 \mathrm{FNR}(h) \;=\; \Pr_{Q_1}\!\big[h = 0\big],
 \qquad
 \mathrm{FPR}(h) \;=\; \Pr_{Q_0}\!\big[h = 1\big].
 \]
+Randomized guards are also permitted: $h$ may be a Markov kernel $\mathcal{Y} \to [0,1]$ giving $\Pr[h(y) = 1]$; the results of this section carry over via the standard reduction to deterministic tests plus randomization at the decision (Tsybakov 2009 \S 2.2).
 
 \begin{proposition}[Double-Sided Indistinguishability Lower Bound]\label{prop:1}
 For any (deterministic or randomized) binary guard $h$ that is $\sigma(O)$-measurable,
@@ -433,7 +439,7 @@ and hence
 \max\!\big\{\mathrm{FNR}(h),\ \mathrm{FPR}(h)\big\} \;\ge\; \frac{1 - \TV(Q_1, Q_0)}{2}.
 \]
 In particular, if $Q_1 = Q_0$, at least one of $\mathrm{FNR}(h)$ or $\mathrm{FPR}(h)$ is at least $1/2$.
-\end{proposition>
+\end{proposition}
 
 \subsection{Proof of Proposition 1}
 
@@ -448,7 +454,7 @@ by Le~Cam's two-point inequality \REF{Tsybakov 2009, \emph{Introduction to Nonpa
 \[
 \mathrm{FNR}(h) + \mathrm{FPR}(h) = \Pr_{Q_1}[h = 0] + \Pr_{Q_0}[h = 1] \ge 1 - \TV(Q_1, Q_0).
 \]
-The maximum-of-two bound follows from $\max(a, b) \ge (a + b)/2$ for non-negative $a, b$.
+The maximum-of-two bound follows from $\max(a, b) \ge (a + b)/2$, which holds for any real $a, b$; nonnegativity of $\mathrm{FNR}, \mathrm{FPR}$ ensures the resulting lower bound $(1 - \TV)/2$ is itself a meaningful (nonnegative) rate lower bound.
 \end{proof}
 
 \subsection{Remarks on Proposition 1}
@@ -483,17 +489,30 @@ content, cannot break indistinguishability.
 \end{corollary}
 
 \begin{proof}
-Marginalization from $(O, Z)$ back to $O$ is a deterministic channel, hence a valid (deterministic) randomization.
+Let $\pi: \mathcal{Y} \times \mathcal{Z} \to \mathcal{Y}$, $(o, z) \mapsto o$ denote the marginalization projection; $\pi$ is a deterministic (hence Markov) channel.
 By the data-processing inequality for total variation
 \REF{Polyanskiy \& Wu 2024, \emph{Information Theory: From Coding to Learning}, Ch.~7; Cover \& Thomas 2006, \emph{Elements of Information Theory}, Ch.~2},
+passing through $\pi$ cannot increase TV distance:
 \[
-\TV\!\big(Q_1^{O,Z}, Q_0^{O,Z}\big) \;\ge\; \TV\!\big(Q_1^{O}, Q_0^{O}\big).
+\TV\!\big(\pi_* Q_1^{O,Z},\ \pi_* Q_0^{O,Z}\big)
+\;\le\;
+\TV\!\big(Q_1^{O,Z},\ Q_0^{O,Z}\big).
 \]
-The bound in Proposition~\ref{prop:1} is monotone decreasing in the TV distance of the observation channel;
-therefore, if extending the channel from $O$ to $(O, Z)$ does not \emph{strictly} increase TV, the lower bound on
-$\mathrm{FNR}(h) + \mathrm{FPR}(h)$ is unchanged. A sufficient condition for equality is $Z \perp Y \mid O$
-(the appended variable is conditionally independent of the label given the existing observation).
+Since $\pi_* Q_y^{O,Z} = Q_y^{O}$ (marginalization over $Z$), this rewrites as
+\[
+\TV\!\big(Q_1^{O},\ Q_0^{O}\big)
+\;\le\;
+\TV\!\big(Q_1^{O,Z},\ Q_0^{O,Z}\big).
+\]
+The Proposition~\ref{prop:1} lower bound is monotone decreasing in observation-channel TV distance; therefore, when the DPI inequality above holds with equality (adding $Z$ does not strictly increase TV), the lower bound on $\mathrm{FNR}(h) + \mathrm{FPR}(h)$ is preserved.
+A sufficient condition for equality is $Z \perp Y \mid O$: the appended variable is conditionally independent of the safety label given the existing observation, so $Z$ carries no incremental label-separating information.
 \end{proof}
+
+\begin{remark}[Existence vs. universal]\label{rem:cor1-scope}
+Corollary~\ref{cor:1} is an \emph{existence} statement: it exhibits authenticated channels $Z$ (for example, valid signatures over adversarially-chosen content, or provenance tags whose distribution is independent of $Y$) that fail to improve the TV lower bound.
+It does \emph{not} claim that every signature-based scheme is informationally weaker than every semantic attestation; some signatures may in fact carry label-separating information via correlated deployment structure.
+The paper invokes Corollary~\ref{cor:1} only to motivate separating authenticity from semantic authorization (\S 1.2), not to establish a universal ordering.
+\end{remark>
 
 \NOTE{This formalizes why \S 1.2 of v0.2 distinguishes \emph{authenticity}
 from \emph{semantic authorization}: a policy attestation is informative about $Y$ only if its conditional

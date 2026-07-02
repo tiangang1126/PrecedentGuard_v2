@@ -164,6 +164,8 @@ For the target action node \(A_t\), the guard uses an evidence parent set \(P_t\
 - **replay:** rerun the downstream component while fixing other recorded inputs;
 - **withholding:** prevent the item from entering the next decision context.
 
+**Implementation scope.** The current PrecedentGuard implementation exercises **ablation** and **replacement** end-to-end; **replay** and **withholding** are declared as first-class operators to keep the graph interface compositional, but all theorems in this paper (Theorems 1–3 and Proposition 1) require only the ablation/replacement subset. Replay- and withholding-based ablations are marked as future work in §9.
+
 ### 3.3 Threat model
 
 The adversary may modify a bounded set \(B\subseteq P_t\) of mutable evidence nodes. We use a vector budget
@@ -551,7 +553,7 @@ with a corresponding term for FPR if incorrect attestations can increase risk. T
 
 The original paper plan proposed a universal impossibility theorem based on the absence of a cryptographic anchor. That claim is too broad: a guard may classify perfectly from another uncorrupted variable. The correct obstruction is lack of label-separating information.
 
-**Measurable setup.** Let \((\Omega, \mathcal{F}, \Pr)\) carry the input \(X\), the label \(Y\in\{0,1\}\), and any adversary randomness. Let \(O:\Omega\to\mathcal{Y}\) be a measurable observation channel emitting the sub-\(\sigma\)-algebra \(\sigma(O)\subseteq\mathcal{F}\) visible to a binary guard \(h:\mathcal{Y}\to\{0,1\}\); \(h\) is \(\sigma(O)\)-measurable. The attacker \(a\) is a Markov kernel (possibly randomized) from \(\mathcal{X}\) to \(\mathcal{X}\), applied before observation. Define \(Q_y := \operatorname{Law}(O(a(X))\mid Y=y)\) for \(y\in\{0,1\}\), the pushforward distributions on \(\sigma(O)\). Under this setup, \(\operatorname{FNR}(h)=\Pr_{Q_1}[h=0]\) and \(\operatorname{FPR}(h)=\Pr_{Q_0}[h=1]\).
+**Measurable setup.** Let \((\Omega, \mathcal{F}, \Pr)\) carry the input \(X:\Omega\to\mathcal{X}\), the label \(Y:\Omega\to\{0,1\}\), and an adversary randomization source \(U_{\mathrm{adv}}\). Let \((\mathcal{Y},\mathcal{B}_\mathcal{Y})\) be the observation space with its Borel \(\sigma\)-algebra, and let \(O:\Omega\to\mathcal{Y}\) be a measurable observation channel visible to the guard. A binary guard is a Borel-measurable function \(h:\mathcal{Y}\to\{0,1\}\); randomized guards (Markov kernels \(\mathcal{Y}\to[0,1]\)) are also permitted. The attacker is a Markov kernel \(a:\mathcal{X}\times\sigma(U_{\mathrm{adv}})\to\mathcal{X}\), and we assume the **label-oblivious** condition \(U_{\mathrm{adv}}\perp Y\mid X\) (the attacker does not observe \(Y\); a label-aware variant is discussed in the appendix). Define the attacked observable distributions as probability measures on \((\mathcal{Y},\mathcal{B}_\mathcal{Y})\): \(Q_y(B):=\Pr(O(a(X,U_{\mathrm{adv}}))\in B\mid Y=y)\) for \(B\in\mathcal{B}_\mathcal{Y}\), \(y\in\{0,1\}\). Then \(\operatorname{FNR}(h)=\Pr_{Q_1}[h=0]\) and \(\operatorname{FPR}(h)=\Pr_{Q_0}[h=1]\).
 
 **Proposition 1 (Double-Sided Indistinguishability Lower Bound).**
 
