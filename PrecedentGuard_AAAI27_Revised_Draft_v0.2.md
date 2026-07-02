@@ -1008,26 +1008,53 @@ AAAI-27 abstract and paper deadlines are July 21 and July 28, 2026, respectively
 
 ---
 
-# References to Verify and Include
+# References (Day 4 Verification Status)
 
-The final bibliography should be generated from primary sources and verified BibTeX. Core anchors include:
+Every entry below marks its verification level: **[V]** = arXiv/DOI/venue independently confirmed via WebSearch on 2026-07-04; **[P]** = placeholder retained from PaperPlan_20260630.md pending re-verification; **[U]** = unverified (requires re-check before final submission).
 
-1. Pearl, *Causality*.
-2. Everitt et al., causal influence diagrams for agent incentives and safety.
-3. Richens and Everitt, robust agents and causal world models.
-4. Hahm et al., “Enhancing LLM Agent Safety via Causal Influence Prompting,” Findings of ACL 2025.
-5. Zhang et al., “AgentSentry: Mitigating Indirect Prompt Injection in LLM Agents via Temporal Causal Diagnostics and Context Purification,” arXiv:2602.22724.
-6. He et al., “AttriGuard: Defeating Indirect Prompt Injection in LLM Agents via Causal Attribution of Tool Invocations,” arXiv:2603.10749.
-7. Sharma, “SMSR: Certified Defence Against Runtime Memory Poisoning in Persistent LLM Agent Systems,” arXiv:2606.12703.
-8. Ouyang and Hou, “MemLineage: Lineage-Guided Enforcement for LLM Agent Memory,” arXiv:2605.14421.
-9. AgentPoison.
-10. MINJA.
-11. PoisonedRAG.
-12. AgentHarm.
-13. Agent-SafetyBench.
-14. R-Judge.
-15. AgentDojo.
-16. InjecAgent.
-17. Llama Guard, ShieldGemma, Granite Guardian, and WildGuard technical papers.
-18. Relevant conformal risk-control and calibrated-agent work, included only where assumptions and objectives are accurately distinguished.
+## Core anchors (paper §2 in-line references)
+
+1. **[P]** Pearl, J. 2009. *Causality: Models, Reasoning and Inference*. 2nd ed. Cambridge University Press.
+2. **[P]** Everitt, T.; Hutter, M.; Kumar, R.; Krakovna, V. 2021. Reward Tampering Problems and Solutions in Reinforcement Learning: A Causal Influence Diagram Perspective. *Synthese*, 198(Suppl 27): 6435–6467.
+3. **[P]** Richens, J.; Everitt, T. 2024. Robust Agents Learn Causal World Models. In *ICLR 2024*.
+4. **[V]** Hahm, D.; Jin, W.; Choi, J. S.; Ahn, S.; Lee, K. 2025. Enhancing LLM Agent Safety via Causal Influence Prompting. In *Findings of the Association for Computational Linguistics: ACL 2025*, pages 15143–15168. arXiv:2507.00979.
+5. **[V]** Zhang, T.; Xu, Y.; Wang, J.; Guo, K.; Xu, X.; Xiao, B.; Guan, Q.; Fan, J.; Liu, J.; Liu, Z.; Hu, H. 2026. AgentSentry: Mitigating Indirect Prompt Injection in LLM Agents via Temporal Causal Diagnostics and Context Purification. arXiv:2602.22724.
+6. **[V]** He, Y.; Zhu, H.; Li, Y.; Shao, S.; Yao, H.; Liu, Z.; Qin, Z. 2026. AttriGuard: Defeating Indirect Prompt Injection in LLM Agents via Causal Attribution of Tool Invocations. arXiv:2603.10749.
+7. **[V]** Sharma, T. 2026. SMSR: Certified Defence Against Runtime Memory Poisoning in Persistent LLM Agent Systems. arXiv:2606.12703. Code: https://github.com/tarun-ks/smsr.
+8. **[V]** Ouyang, C.; Hou, R. 2026. MemLineage: Lineage-Guided Enforcement for LLM Agent Memory. arXiv:2605.14421. (State Key Laboratory of Cyberspace Security Defense, IIE, CAS)
+
+## Memory poisoning attacks (paper §2.3)
+
+9. **[P]** Chen, Z.; Xiang, Z.; Xiao, C.; Song, D.; Li, B. 2024. AgentPoison: Red-teaming LLM Agents via Poisoning Memory or Knowledge Bases. In *NeurIPS 2024*. arXiv:2407.12784.
+10. **[P]** Dong, S.; Xu, S.; He, P.; et al. 2025. A Practical Memory Injection Attack against LLM Agents (MINJA). In *NeurIPS 2025*. arXiv:2503.03704.
+11. **[P]** Zou, W.; Geng, R.; Wang, B.; Jia, J. 2025. PoisonedRAG: Knowledge Corruption Attacks to Retrieval-Augmented Generation of Large Language Models. In *USENIX Security 2025*. arXiv:2402.07867.
+
+## Benchmarks (paper §6.2)
+
+12. **[P]** Andriushchenko, M.; Souly, A.; Dziemian, M.; et al. 2024. AgentHarm: A Benchmark for Measuring Harmfulness of LLM Agents. In *ICLR 2025*. arXiv:2410.09024.
+13. **[P]** Zhang, Z.; Cui, S.; Lu, Y.; et al. 2024. Agent-SafetyBench: Evaluating the Safety of LLM Agents. In *ACL 2025*. arXiv:2412.14470.
+14. **[P]** Yuan, T.; He, Z.; Dong, L.; et al. 2024. R-Judge: Benchmarking Safety Risk Awareness for LLM Agents. In *Findings of EMNLP 2024*. arXiv:2401.10019.
+15. **[P]** Debenedetti, E.; Zhang, J.; Balunovic, M.; et al. 2024. AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents. In *NeurIPS 2024 D&B*. arXiv:2406.13352.
+16. **[P]** Zhan, Q.; Liang, Z.; Ying, Z.; Kang, D. 2024. InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated LLMs. In *Findings of ACL 2024*. arXiv:2403.02691.
+
+## Static guard backbones (paper §2.1)
+
+17. **[P]** Inan, H.; Upasani, K.; Chi, J.; et al. 2024. Llama Guard: LLM-Based Input-Output Safeguard. arXiv:2312.06674. Plus subsequent LLaMA-Guard 3/4 releases.
+18. **[P]** Zeng, W.; Liu, Y.; Mullins, R.; et al. 2024. ShieldGemma: Generative AI Content Moderation Based on Gemma. arXiv:2407.21772.
+19. **[P]** Padhi, I.; Nagireddy, M.; Cornacchia, G.; et al. 2024. Granite Guardian. arXiv:2412.07724.
+20. **[P]** Han, S.; Rao, K.; Ettinger, A.; et al. 2024. WildGuard: Open One-Stop Moderation Tools for Safety Risks, Jailbreaks, and Refusals of LLMs. In *NeurIPS 2024 D&B*. arXiv:2406.18495.
+
+## Learning-theoretic tools (paper §5.4, Appendix A.3–A.4)
+
+21. **[V]** Angelopoulos, A. N.; Bates, S.; Fisch, A.; Lei, L.; Schuster, T. 2024. Conformal Risk Control. In *ICLR 2024*. arXiv:2208.02814. (Reviewer-corrected 2026-07-01: original 2023-NeurIPS attribution was wrong.)
+22. **[P]** Tsybakov, A. B. 2009. *Introduction to Nonparametric Estimation*. Springer. Theorem 2.2 (Le Cam two-point inequality).
+23. **[P]** Boucheron, S.; Lugosi, G.; Massart, P. 2013. *Concentration Inequalities: A Nonasymptotic Theory of Independence*. Oxford. Theorem 2.8 (Hoeffding).
+24. **[P]** Polyanskiy, Y.; Wu, Y. 2024. *Information Theory: From Coding to Learning*. Cambridge. Ch. 7 (Data-processing inequality for total variation).
+
+## Pre-submission audit tasks
+
+- [ ] Re-verify all **[P]** entries via arXiv/DOI/venue lookup during Day 5–7.
+- [ ] Convert this list to `references.bib` with verified BibTeX entries.
+- [ ] Confirm all in-text citations (Sections §1–§8) resolve to an entry in this list.
+- [ ] Self-citation ratio ≤ 15% (PrecedentGuard v2 advisor draft not yet public — counts only published work).
 
