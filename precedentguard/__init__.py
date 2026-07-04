@@ -20,6 +20,23 @@ from precedentguard.eig import (
     RuntimeEvent,
     build_eig_from_events,
 )
+from precedentguard.backends import (
+    GraniteGuardianBackend,
+    HFGuardBackend,
+    LlamaGuardBackend,
+    ShieldGemmaBackend,
+)
+from precedentguard.guard import (
+    AttestationContext,
+    Decision,
+    PrecedentGuard,
+    Verdict,
+)
+from precedentguard.retrieval import (
+    PrecedentCapsule,
+    RetrievedPrecedent,
+    SimplePrecedentStore,
+)
 
 __version__ = "0.2.0-day2"
 
@@ -31,8 +48,19 @@ __all__ = [
     "InterventionOp",
     "Node",
     "NodeType",
+    "GraniteGuardianBackend",
+    "HFGuardBackend",
+    "LlamaGuardBackend",
+    "AttestationContext",
+    "Decision",
     "Provenance",
+    "PrecedentGuard",
+    "PrecedentCapsule",
+    "RetrievedPrecedent",
     "RuntimeEvent",
+    "ShieldGemmaBackend",
+    "SimplePrecedentStore",
     "TrustLevel",
+    "Verdict",
     "build_eig_from_events",
 ]
