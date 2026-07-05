@@ -250,6 +250,64 @@ class TestRetrievalRanking(unittest.TestCase):
         with self.assertRaises(ValueError):
             store.retrieve("q", "a", top_k=0)
 
+    def test_retrieval_debug_summary_reports_component_scores(self):
+        store = SimplePrecedentStore(lambda_s=1.0, lambda_a=0.0, lambda_g=0.0)
+        store.add(mk_cap("safe-cap", "read benign email inbox", "send-email", label=0))
+        store.add(mk_cap("unsafe-cap", "steal banking password", "wire-funds", label=1))
+
+        summary = store.retrieval_debug_summary(
+            query_summary="read benign email inbox",
+            query_action="send-email",
+            top_k=2,
+        )
+
+        self.assertEqual(summary["hit_count"], 2)
+        self.assertEqual(summary["label_distribution"]["safe"], 1)
+        self.assertEqual(summary["label_distribution"]["unsafe"], 1)
+        self.assertEqual(summary["top_matches"][0]["capsule_id"], "safe-cap")
+        self.assertIn("text_similarity", summary["top_matches"][0])
+        self.assertIn("raw_score", summary["top_matches"][0])
+        self.assertIn("normalized_weight", summary["top_matches"][0])
+
+    def test_label_balanced_retrieval_selects_opposite_label_when_competitive(self):
+        store = SimplePrecedentStore(lambda_s=1.0, lambda_a=0.0, lambda_g=0.0)
+        store.add(mk_cap("safe-1", "alpha beta gamma delta", "act", label=0))
+        store.add(mk_cap("safe-2", "alpha beta gamma", "act", label=0))
+        store.add(mk_cap("unsafe-1", "alpha beta delta", "act", label=1))
+
+        results = store.retrieve(
+            "alpha beta gamma delta",
+            "act",
+            top_k=2,
+            strategy="label_balanced",
+        )
+
+        self.assertEqual(len(results), 2)
+        labels = {r.capsule.audited_label for r in results}
+        self.assertEqual(labels, {0, 1})
+
+    def test_label_balanced_debug_summary_marks_selected_matches(self):
+        store = SimplePrecedentStore(lambda_s=1.0, lambda_a=0.0, lambda_g=0.0)
+        store.add(mk_cap("safe-1", "alpha beta gamma delta", "act", label=0))
+        store.add(mk_cap("safe-2", "alpha beta gamma", "act", label=0))
+        store.add(mk_cap("unsafe-1", "alpha beta delta", "act", label=1))
+
+        summary = store.retrieval_debug_summary(
+            "alpha beta gamma delta",
+            "act",
+            top_k=2,
+            selected_top_k=2,
+            strategy="label_balanced",
+        )
+
+        self.assertEqual(summary["strategy"], "label_balanced")
+        self.assertEqual(summary["selected_label_distribution"]["safe"], 1)
+        self.assertEqual(summary["selected_label_distribution"]["unsafe"], 1)
+        self.assertEqual(
+            sum(1 for item in summary["top_matches"] if item["selected"]),
+            2,
+        )
+
 
 class TestRawScore(unittest.TestCase):
     """Sanity-check the weighted combination in §4.3."""

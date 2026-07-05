@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Iterable
 
 from precedentguard.types import Provenance
 
@@ -74,6 +74,20 @@ class RetrievedPrecedent:
     def __post_init__(self) -> None:
         if not (0.0 <= self.weight <= 1.0):
             raise ValueError(f"weight must be in [0, 1]; got {self.weight}")
+
+
+@dataclass(frozen=True)
+class RetrievalDebugMatch:
+    """Per-capsule retrieval score breakdown for diagnostics only."""
+
+    capsule_id: str
+    audited_label: int
+    text_similarity: float
+    action_similarity: float
+    graph_similarity: float
+    raw_score: float
+    normalized_weight: float
+    selected: bool = False
 
 
 # ----------------------------------------------------------------------
@@ -145,6 +159,7 @@ class SimplePrecedentStore:
     lambda_a: float = 0.3
     lambda_g: float = 0.2
     w_max: float = 0.5
+    label_balance_min_ratio: float = 0.75
 
     _capsules: dict[str, PrecedentCapsule] = field(default_factory=dict, init=False)
 
@@ -161,6 +176,11 @@ class SimplePrecedentStore:
             )
         if not (0.0 < self.w_max <= 1.0):
             raise ValueError(f"w_max must be in (0, 1]; got {self.w_max}")
+        if not (0.0 <= self.label_balance_min_ratio <= 1.0):
+            raise ValueError(
+                "label_balance_min_ratio must be in [0, 1]; "
+                f"got {self.label_balance_min_ratio}"
+            )
 
     # -------- CRUD --------
 
@@ -208,12 +228,204 @@ class SimplePrecedentStore:
             + self.lambda_g * s_graph
         )
 
+    def score_breakdown(
+        self,
+        capsule: PrecedentCapsule,
+        query_summary: str,
+        query_action: str,
+        query_subgraph_signature: str = "",
+    ) -> dict[str, float]:
+        """Return component-wise similarities for diagnostics."""
+        s_text = self.text_sim(query_summary, capsule.trajectory_summary)
+        s_action = self.action_sim(query_action, capsule.proposed_action)
+        s_graph = (
+            self.subgraph_sim(query_subgraph_signature, capsule.subgraph_signature)
+            if capsule.subgraph_signature or query_subgraph_signature
+            else 0.0
+        )
+        combined = (
+            self.lambda_s * s_text
+            + self.lambda_a * s_action
+            + self.lambda_g * s_graph
+        )
+        return {
+            "text_similarity": s_text,
+            "action_similarity": s_action,
+            "graph_similarity": s_graph,
+            "raw_score": combined,
+        }
+
+    def retrieval_debug_summary(
+        self,
+        query_summary: str,
+        query_action: str,
+        query_subgraph_signature: str = "",
+        top_k: int = 5,
+        selected_top_k: int | None = None,
+        strategy: str = "vanilla",
+    ) -> dict[str, Any]:
+        """Return top-k diagnostic breakdown without changing retrieval logic."""
+        if top_k < 1:
+            raise ValueError(f"top_k must be >= 1; got {top_k}")
+        if selected_top_k is None:
+            selected_top_k = top_k
+        if selected_top_k < 1:
+            raise ValueError(f"selected_top_k must be >= 1; got {selected_top_k}")
+        if not self._capsules:
+            return {
+                "hit_count": 0,
+                "label_distribution": {"safe": 0, "unsafe": 0},
+                "selected_label_distribution": {"safe": 0, "unsafe": 0},
+                "top_matches": [],
+                "strategy": strategy,
+            }
+
+        scored = self._score_capsules(
+            query_summary,
+            query_action,
+            query_subgraph_signature,
+        )
+        probe = scored[:top_k]
+        selected = self._select_capsules(
+            scored,
+            top_k=selected_top_k,
+            strategy=strategy,
+        )
+        selected_ids = {cap.capsule_id for cap, _ in selected}
+        report_items = list(probe)
+        for item in selected:
+            if item[0].capsule_id not in {cap.capsule_id for cap, _ in report_items}:
+                report_items.append(item)
+        report_items.sort(key=lambda t: (-t[1]["raw_score"], t[0].capsule_id))
+
+        weights = self._normalize_scores(
+            [metrics["raw_score"] for _, metrics in report_items]
+        )
+        matches = [
+            RetrievalDebugMatch(
+                capsule_id=cap.capsule_id,
+                audited_label=cap.audited_label,
+                text_similarity=metrics["text_similarity"],
+                action_similarity=metrics["action_similarity"],
+                graph_similarity=metrics["graph_similarity"],
+                raw_score=metrics["raw_score"],
+                normalized_weight=weight,
+                selected=cap.capsule_id in selected_ids,
+            )
+            for (cap, metrics), weight in zip(report_items, weights)
+        ]
+        return {
+            "hit_count": len(matches),
+            "label_distribution": {
+                "safe": sum(1 for m in matches if m.audited_label == 0),
+                "unsafe": sum(1 for m in matches if m.audited_label == 1),
+            },
+            "selected_label_distribution": {
+                "safe": sum(
+                    1 for cap, _ in selected if cap.audited_label == 0
+                ),
+                "unsafe": sum(
+                    1 for cap, _ in selected if cap.audited_label == 1
+                ),
+            },
+            "strategy": strategy,
+            "top_matches": [
+                {
+                    "capsule_id": match.capsule_id,
+                    "audited_label": match.audited_label,
+                    "text_similarity": round(match.text_similarity, 6),
+                    "action_similarity": round(match.action_similarity, 6),
+                    "graph_similarity": round(match.graph_similarity, 6),
+                    "raw_score": round(match.raw_score, 6),
+                    "normalized_weight": round(match.normalized_weight, 6),
+                    "selected": match.selected,
+                }
+                for match in matches
+            ],
+        }
+
+    def _score_capsules(
+        self,
+        query_summary: str,
+        query_action: str,
+        query_subgraph_signature: str = "",
+    ) -> list[tuple[PrecedentCapsule, dict[str, float]]]:
+        scored: list[tuple[PrecedentCapsule, dict[str, float]]] = []
+        for cid, cap in self._capsules.items():
+            _ = cid
+            scored.append(
+                (
+                    cap,
+                    self.score_breakdown(
+                        cap,
+                        query_summary,
+                        query_action,
+                        query_subgraph_signature,
+                    ),
+                )
+            )
+        scored.sort(key=lambda t: (-t[1]["raw_score"], t[0].capsule_id))
+        return scored
+
+    def _normalize_scores(self, raw_scores: list[float]) -> list[float]:
+        if not raw_scores:
+            return []
+        raw_sum = sum(raw_scores)
+        if raw_sum <= 0:
+            uniform = min(self.w_max, 1.0 / len(raw_scores))
+            return [uniform for _ in raw_scores]
+        return self._water_fill_cap([score / raw_sum for score in raw_scores])
+
+    def _select_capsules(
+        self,
+        scored: list[tuple[PrecedentCapsule, dict[str, float]]],
+        *,
+        top_k: int,
+        strategy: str,
+    ) -> list[tuple[PrecedentCapsule, dict[str, float]]]:
+        if strategy == "vanilla":
+            return scored[:top_k]
+        if strategy != "label_balanced":
+            raise ValueError(f"unsupported retrieval strategy: {strategy}")
+
+        if not scored or top_k <= 0:
+            return []
+
+        selected: list[tuple[PrecedentCapsule, dict[str, float]]] = [scored[0]]
+        remaining = scored[1:]
+        if top_k == 1:
+            return selected
+
+        first_label = selected[0][0].audited_label
+        first_score = selected[0][1]["raw_score"]
+        min_score = first_score * self.label_balance_min_ratio
+        opposite = next(
+            (
+                item for item in remaining
+                if item[0].audited_label != first_label
+                and item[1]["raw_score"] >= min_score
+            ),
+            None,
+        )
+        if opposite is not None:
+            selected.append(opposite)
+            remaining = [
+                item for item in remaining
+                if item[0].capsule_id != opposite[0].capsule_id
+            ]
+        for item in remaining:
+            if len(selected) >= top_k:
+                break
+            selected.append(item)
+        return selected
+
     def retrieve(
         self,
         query_summary: str,
         query_action: str,
         query_subgraph_signature: str = "",
         top_k: int = 5,
+        strategy: str = "vanilla",
     ) -> list[RetrievedPrecedent]:
         """Return top-k precedents ranked by combined similarity.
 
@@ -225,28 +437,15 @@ class SimplePrecedentStore:
         if not self._capsules:
             return []
 
-        # Score every capsule
-        scored: list[tuple[str, PrecedentCapsule, float]] = []
-        for cid, cap in self._capsules.items():
-            r = self.raw_score(cap, query_summary, query_action,
-                               query_subgraph_signature)
-            scored.append((cid, cap, r))
-        # Sort: higher score first, ties by capsule_id
-        scored.sort(key=lambda t: (-t[2], t[0]))
-
-        top = scored[:top_k]
-        raw_sum = sum(r for _, _, r in top)
-        if raw_sum <= 0:
-            # All zero — return uniform weights within cap
-            k = len(top)
-            uniform = min(self.w_max, 1.0 / k)
-            return [RetrievedPrecedent(cap, uniform) for _, cap, _ in top]
-
-        # Normalize, then apply w_max cap with water-filling to keep Σ = 1
-        weights = [r / raw_sum for _, _, r in top]
-        final = self._water_fill_cap(weights)
+        scored = self._score_capsules(
+            query_summary,
+            query_action,
+            query_subgraph_signature,
+        )
+        top = self._select_capsules(scored, top_k=top_k, strategy=strategy)
+        final = self._normalize_scores([metrics["raw_score"] for _, metrics in top])
         return [
-            RetrievedPrecedent(cap, w) for (_, cap, _), w in zip(top, final)
+            RetrievedPrecedent(cap, w) for (cap, _), w in zip(top, final)
         ]
 
     def _water_fill_cap(self, weights: list[float]) -> list[float]:

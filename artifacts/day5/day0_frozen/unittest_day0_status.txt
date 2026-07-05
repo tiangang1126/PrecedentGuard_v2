@@ -1,0 +1,4 @@
+Day 0 checkpoint status
+-----------------------
+Regression status: 145/145 OK
+Meaning: this is the frozen Day 0 checkpoint before Day 1 semantic-payload work.

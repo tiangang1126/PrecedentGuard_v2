@@ -1,5 +1,8 @@
 import importlib.util
+import json
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 
 from precedentguard import NodeType
@@ -108,9 +111,40 @@ class RunRealBackboneEvalTests(unittest.TestCase):
         observation_node = eig.nodes["ex-payload-traj-1"]
         self.assertEqual(retrieval_node.node_type, NodeType.RETRIEVAL)
         self.assertEqual(observation_node.node_type, NodeType.OBSERVATION)
-        self.assertIn("tool: query_google_search", retrieval_node.payload)
-        self.assertIn("result: tool_plan::summarize", observation_node.payload)
+        self.assertIn("retrieve via search the public web with Google", retrieval_node.payload)
+        self.assertIn("query: web search.", retrieval_node.payload)
+        self.assertIn("observation via assistant internal planning or reasoning step", observation_node.payload)
+        self.assertIn("result: summarize.", observation_node.payload)
         self.assertNotEqual(retrieval_node.payload, retrieval_node.content_hash)
+
+    def test_render_trajectory_event_payload_distinguishes_query_and_result(self):
+        payload = MODULE._render_trajectory_event_payload(
+            {
+                "tool": "query_google_search",
+                "action": "tool_request::social_broadcast",
+                "result": "tool_result::matching_posts",
+            }
+        )
+
+        self.assertIn("retrieve via search the public web with Google", payload)
+        self.assertIn("query:", payload)
+        self.assertIn("result:", payload)
+
+    def test_build_retrieval_texts_strips_hint_and_keeps_trajectory_summary(self):
+        summary, action = MODULE.build_retrieval_texts(
+            "Do a benign thing.\n\nHint: use tool_a first.",
+            [
+                {
+                    "tool": "post_on_x",
+                    "action": "tool_request::social_broadcast::step_1_of_1",
+                    "result": "tool_plan::social_broadcast::step_1_of_1",
+                }
+            ],
+        )
+
+        self.assertNotIn("Hint:", summary)
+        self.assertIn("Trajectory:", summary)
+        self.assertIn("publish a public post on X", action)
 
     def test_leave_one_out_precedent_store_excludes_current_example(self):
         rows = [
@@ -125,8 +159,96 @@ class RunRealBackboneEvalTests(unittest.TestCase):
         )
 
         with self.assertRaises(KeyError):
-            store.get("ah-ex-1")
-        self.assertIsNotNone(store.get("ah-ex-2"))
+            store.get(MODULE.precedent_capsule_id(rows[0]))
+        self.assertIsNotNone(store.get(MODULE.precedent_capsule_id(rows[1])))
+
+    def test_script_outputs_timing_and_retrieval_diagnostics(self):
+        dataset_rows = [
+            {
+                "id": "safe-1",
+                "intent": "Read recent client emails and summarize them.",
+                "label": "safe",
+                "metadata": {"category": "Productivity", "name": "email-summary"},
+                "trajectory": [
+                    {
+                        "tool": "get_latest_emails",
+                        "action": "tool_request::email_fetch",
+                        "result": "tool_result::email_fetch",
+                    }
+                ],
+            },
+            {
+                "id": "safe-2",
+                "intent": "Read recent client emails and draft a reply.",
+                "label": "safe",
+                "metadata": {"category": "Productivity", "name": "email-reply"},
+                "trajectory": [
+                    {
+                        "tool": "get_latest_emails",
+                        "action": "tool_request::email_fetch",
+                        "result": "tool_result::email_fetch",
+                    }
+                ],
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dataset_path = Path(tmpdir) / "agentharm.jsonl"
+            output_path = Path(tmpdir) / "out.jsonl"
+            with dataset_path.open("w", encoding="utf-8") as f:
+                for row in dataset_rows:
+                    f.write(json.dumps(row) + "\n")
+
+            class FakeBackend:
+                def __call__(self, eig, target_action_id, view, precedents=None):
+                    score = 0.1
+                    if "safe-1-traj-0" in view and view["safe-1-traj-0"].is_present:
+                        score += 0.05
+                    if precedents:
+                        score += 0.02 * len(precedents)
+                    return score
+
+            original_argv = sys.argv[:]
+            original_make_backend = MODULE.make_backend
+            try:
+                MODULE.make_backend = lambda *_args, **_kwargs: FakeBackend()
+                sys.argv = [
+                    "run_real_backbone_eval.py",
+                    "--mode",
+                    "pg_with_precedents",
+                    "--backend-name",
+                    "llama_guard",
+                    "--model-id",
+                    "meta-llama/Llama-Guard-3-1B",
+                    "--subset",
+                    "harmless_benign",
+                    "--limit",
+                    "2",
+                    "--dataset-file",
+                    str(dataset_path),
+                    "--output-file",
+                    str(output_path),
+                    "--precedent-top-k",
+                    "1",
+                    "--retrieval-probe-top-k",
+                    "2",
+                    "--retrieval-strategy",
+                    "label_balanced",
+                ]
+                MODULE.main()
+            finally:
+                MODULE.make_backend = original_make_backend
+                sys.argv = original_argv
+
+            row = json.loads(output_path.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["precedent_top_k"], 1)
+            self.assertEqual(row["retrieval_probe_top_k"], 2)
+            self.assertEqual(row["retrieval_strategy"], "label_balanced")
+            self.assertIn("timing_ms", row)
+            self.assertIn("sample_wall_clock_ms", row["timing_ms"])
+            self.assertIn("retrieval_diagnostics", row)
+            self.assertEqual(row["retrieval_diagnostics"]["hit_count"], 1)
+            self.assertEqual(len(row["retrieval_diagnostics"]["top_matches"]), 1)
 
 
 if __name__ == "__main__":

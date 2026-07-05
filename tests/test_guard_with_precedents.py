@@ -18,7 +18,7 @@ from precedentguard import (
     SimplePrecedentStore,
     build_eig_from_events,
 )
-from precedentguard.clipping import TypeCaps, symmetric_caps
+from precedentguard.clipping import symmetric_caps
 from precedentguard.guard import (
     AttestationContext,
     PrecedentGuard,
@@ -72,7 +72,7 @@ def guard_with_precedent_effect(base: float, mem_effect: float,
                                  precedent_effect_per_item: float):
     """Mock guard: base + mem_effect (if mem present) + N * precedent_effect."""
 
-    def guard(eig, target_action_id, view, precedents=None):
+    def guard(_eig, _target_action_id, view, precedents=None):
         score = base
         if "mem" in view and view["mem"].is_present:
             score += mem_effect
@@ -134,6 +134,27 @@ class TestPrecedentFlowBasic(unittest.TestCase):
             self.assertAlmostEqual(
                 decision.per_precedent_delta[cid], 0.02, places=6
             )
+
+    def test_decision_exposes_timing_and_retrieval_diagnostics(self):
+        store = SimplePrecedentStore()
+        store.add(mk_capsule("c1", label=1, summary="prior-transfer-case"))
+
+        guard = guard_with_precedent_effect(0.3, 0.0, 0.02)
+        pg = PrecedentGuard(
+            base_guard=guard,
+            caps_by_type=CAPS,
+            threshold=0.5,
+            precedent_store=store,
+            precedent_top_k=1,
+        )
+        decision = pg.decide(mk_eig(), target_action_id="act")
+
+        self.assertIn("retrieval_ms", decision.timing_ms)
+        self.assertIn("base_guard_ms", decision.timing_ms)
+        self.assertIn("total_ms", decision.timing_ms)
+        self.assertGreaterEqual(decision.timing_ms["total_ms"], 0.0)
+        self.assertEqual(decision.retrieval_diagnostics["hit_count"], 1)
+        self.assertEqual(decision.retrieval_diagnostics["label_distribution"]["unsafe"], 1)
 
 
 class TestPrecedentDirectionalTrust(unittest.TestCase):

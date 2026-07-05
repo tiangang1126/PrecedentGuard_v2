@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import time
 from typing import Any, Callable, Mapping, Optional
 
 from precedentguard.clipping import (
@@ -87,6 +88,10 @@ class Decision:
         Raw delta_i for each precedent (pre-clip).
     per_precedent_pg_clipped : dict[str, float]
         Post type-clip + directional-trust-clip; keys are `precedent:<cid>`.
+    timing_ms : dict[str, float]
+        Stage-level profiling summary in milliseconds.
+    retrieval_diagnostics : dict[str, Any]
+        Retrieval hit diagnostics for runtime analysis.
     """
 
     verdict: Verdict
@@ -101,6 +106,8 @@ class Decision:
     precedent_ids: tuple[str, ...] = ()
     per_precedent_delta: dict[str, float] = field(default_factory=dict)
     per_precedent_pg_clipped: dict[str, float] = field(default_factory=dict)
+    timing_ms: dict[str, float] = field(default_factory=dict)
+    retrieval_diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 # Coefficient policy: callers may provide a function beta(node_id, node_type) -> float.
@@ -150,6 +157,8 @@ class PrecedentGuard:
         evidence (backward-compatible).
     precedent_top_k : int
         Number of precedents retrieved per decision.
+    precedent_retrieval_strategy : str
+        Retrieval selection strategy passed to the precedent store.
     """
 
     base_guard: GuardInterface
@@ -162,6 +171,7 @@ class PrecedentGuard:
     attestation_ctx: AttestationContext = field(default_factory=AttestationContext)
     precedent_store: Optional[SimplePrecedentStore] = None
     precedent_top_k: int = 5
+    precedent_retrieval_strategy: str = "vanilla"
 
     def _base_view(self, eig: EIG) -> dict[str, EffectiveNode]:
         """Minimal context for base score B(I, A): ablate all mutable evidence."""
@@ -195,6 +205,7 @@ class PrecedentGuard:
             query_summary=query_summary,
             query_action=query_action,
             top_k=self.precedent_top_k,
+            strategy=self.precedent_retrieval_strategy,
         )
 
     def decide(
@@ -224,27 +235,56 @@ class PrecedentGuard:
         """
         if target_action_id not in eig.nodes:
             raise ValueError(f"target action {target_action_id!r} not in EIG")
+        total_started = time.perf_counter()
+        timing_ms: dict[str, float] = {
+            "retrieval_ms": 0.0,
+            "base_guard_ms": 0.0,
+            "evidence_counterfactual_ms": 0.0,
+            "precedent_counterfactual_ms": 0.0,
+            "aggregation_ms": 0.0,
+            "total_ms": 0.0,
+        }
 
         # Stage 1: parent selection (mutable ancestors of the target action)
         parent_ids = tuple(sorted(eig.mutable_ancestors_of(target_action_id)))
 
         # Stage 2: retrieve precedents (empty when store is None)
+        retrieval_started = time.perf_counter()
         retrieved = self._retrieve_precedents(
             eig, target_action_id, query_summary, query_action
         )
+        timing_ms["retrieval_ms"] = (
+            time.perf_counter() - retrieval_started
+        ) * 1000.0
         retrieved_capsules = [r.capsule for r in retrieved]
+        retrieval_diagnostics = {
+            "hit_count": len(retrieved),
+            "label_distribution": {
+                "safe": sum(1 for r in retrieved if r.capsule.audited_label == 0),
+                "unsafe": sum(1 for r in retrieved if r.capsule.audited_label == 1),
+            },
+            "weights": {
+                r.capsule.capsule_id: round(r.weight, 6)
+                for r in retrieved
+            },
+        }
 
         # Stage 3: base score B(I, A) on the mutable-ablated context, with
         # precedents held CONSTANT (they are inputs to the base setup).
         base_view = self._base_view(eig)
+        base_guard_started = time.perf_counter()
         base_score = float(self.base_guard(
             eig, target_action_id, base_view, precedents=retrieved_capsules,
         ))
+        timing_ms["base_guard_ms"] = (
+            time.perf_counter() - base_guard_started
+        ) * 1000.0
 
         # Stage 4a: per-evidence-parent counterfactual influence (delta_e).
         # Precedents are held constant during the evidence ablation.
         per_delta: dict[str, float] = {}
         contribs: list[Contribution] = []
+        evidence_cf_started = time.perf_counter()
         for pid in parent_ids:
             node = eig.nodes[pid]
             if node.node_type not in self.caps_by_type:
@@ -271,12 +311,16 @@ class PrecedentGuard:
                 is_attested=is_attested,
                 beta=self.beta_fn(pid, node.node_type),
             ))
+        timing_ms["evidence_counterfactual_ms"] = (
+            time.perf_counter() - evidence_cf_started
+        ) * 1000.0
 
         # Stage 4b: per-precedent counterfactual influence (delta_i, §4.4).
         # Precedent contributions use w_i (retrieval weight) as beta and are
         # type-clipped under NodeType.PRECEDENT.
         per_precedent_delta: dict[str, float] = {}
         precedent_ids: list[str] = []
+        precedent_cf_started = time.perf_counter()
         for rp in retrieved:
             if NodeType.PRECEDENT not in self.caps_by_type:
                 raise ValueError(
@@ -305,9 +349,16 @@ class PrecedentGuard:
                 is_attested=is_attested,
                 beta=rp.weight,
             ))
+        timing_ms["precedent_counterfactual_ms"] = (
+            time.perf_counter() - precedent_cf_started
+        ) * 1000.0
 
         # Stage 5: TypeClip -> DirectionalTrustClip -> weighted sum -> outer clip
+        aggregation_started = time.perf_counter()
         agg = aggregate(contribs, self.caps_by_type, self.eps_neg, self.eps_pos)
+        timing_ms["aggregation_ms"] = (
+            time.perf_counter() - aggregation_started
+        ) * 1000.0
 
         s_pg = base_score + agg.final_z
         verdict = Verdict.BLOCK if s_pg >= self.threshold else Verdict.ALLOW
@@ -325,6 +376,7 @@ class PrecedentGuard:
             nid: v for nid, v in agg.per_node_pg_clipped.items()
             if nid.startswith("precedent:")
         }
+        timing_ms["total_ms"] = (time.perf_counter() - total_started) * 1000.0
 
         return Decision(
             verdict=verdict,
@@ -339,4 +391,6 @@ class PrecedentGuard:
             precedent_ids=tuple(precedent_ids),
             per_precedent_delta=per_precedent_delta,
             per_precedent_pg_clipped=per_precedent_pg_clipped,
+            timing_ms=timing_ms,
+            retrieval_diagnostics=retrieval_diagnostics,
         )
