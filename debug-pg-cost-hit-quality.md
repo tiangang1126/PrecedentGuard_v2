@@ -308,3 +308,26 @@
 - Important note:
   - this patch is tied to the current active sandbox config name
   - if Trae rotates to a new `config_name`, the same `/proc` whitelist may need to be re-applied to the new session config JSON
+
+## harmful-10 stop-loss check after prompt-wording repair
+- Command:
+  - `./scripts/run_day1_harmful_precedent_prompt_repair.sh`
+- Practical execution note:
+  - for reproducible experiment flow inside the current sandbox, the harmful script defaults back to `PG_BACKEND_DEVICE=auto`
+  - reason:
+    - explicit `cuda` is still vulnerable to sandbox cleanup touching `/proc/.../comm` after the useful experiment output has already been produced
+    - this is an execution-environment issue, not an experiment-logic issue
+- Final result:
+  - `backbone_only`: `block=10, allow=0, mean_base_score=0.958933`
+  - `before`: `block=10, allow=0, mean_base_score=0.945534, mean_s_pg=0.985125, mean_pg_delta=+0.039591`
+  - `after`: `block=10, allow=0, mean_base_score=0.958933, mean_s_pg=0.911012, mean_pg_delta=-0.047921`
+- Interpretation:
+  - harmful stop-loss is clean:
+    - `10/10 block` is fully preserved
+  - prompt repair aligns the harmful-side `base_score` back to backbone as well:
+    - every sample shows `after_base_inflation = 0.0`
+  - precedents remain active:
+    - `nonzero_precedent_delta_examples = 10`
+  - net conclusion:
+    - the same prompt-layer repair that fixed benign inflation does not damage harmful blocking on the checked slice
+    - this is sufficient evidence to justify promotion to a refreshed tri-mode `10+10`
