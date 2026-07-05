@@ -20,7 +20,11 @@
       "Bash(PYTHONPATH=. python -m unittest discover -s tests)",
       "Bash(PYTHONPATH=. python -c \"import precedentguard\")",
       "Bash(PYTHONPATH=. python -c ' *)",
-      "Bash(PYTHONPATH=. python -m unittest tests.test_guard_with_precedents -v)"
+      "Bash(PYTHONPATH=. python -m unittest tests.test_guard_with_precedents -v)",
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py)",
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_repaired --limit 10)",
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3 --limit 10)",
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit --limit 10)"
     ]
   }
 }
