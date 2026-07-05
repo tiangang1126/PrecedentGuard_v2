@@ -43,6 +43,8 @@ class NodeType(Enum):
     DERIVED_SUMMARY = "derived_summary"  # LLM-produced intermediate summary
     ACTION = "action"                    # candidate action (target of the guard)
     POLICY_ATTESTATION = "policy_attestation"  # signed attestation from validator
+    PRECEDENT = "precedent"              # retrieved past capsule (§4.3); contribution
+                                         # is weighted by w_i (§4.6) rather than beta_e
 
     @property
     def is_mutable_by_attacker(self) -> bool:

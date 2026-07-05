@@ -413,7 +413,7 @@ Latency is reported at median, P90, and P95, together with GPU memory and token 
 
 **Assumption A4: Attestation boundary.** The primary certificate assumes the adversary cannot forge or incorrectly obtain a policy attestation. Authenticated but semantically unauthorised writes remain within the threat model. A stronger certificate with validator error \(\eta\) is discussed in Section 5.5.
 
-**Assumption A5: Grid pre-commitment.** The configuration grid \(\Gamma\) is fixed *before* any calibration example in \(C_0 \cup C_1\) is observed. In particular, \(\Gamma\) is not chosen by minimizing \(\widehat R_{\mathrm{FN}}(\gamma)\) or \(\widehat R_{\mathrm{FP}}(\gamma)\) over calibration data; a hash of \(\Gamma\) is committed to the experiment registry before the calibration split is instantiated. This assumption is required for the union bound in Theorem 3; Theorems 1–2 do not depend on it.
+**Assumption A5: Joint \((\Gamma, \alpha)\) pre-commitment.** Both the configuration grid \(\Gamma\) and the set of candidate confidence levels \(\{\alpha_1, \ldots, \alpha_L\}\) are fixed *before* any calibration example in \(C_0 \cup C_1\) is observed. In particular, neither \(\Gamma\) nor the reported \(\alpha\) is chosen by minimizing \(\widehat R_{\mathrm{FN}}\), \(\widehat R_{\mathrm{FP}}\), or the certificate tightness over calibration data; a joint hash of \((\Gamma, \{\alpha_j\})\) is committed to the experiment registry before the calibration split is instantiated. Post-hoc \(\alpha\) selection is a selective-inference threat equivalent to post-hoc \(\Gamma\) selection and is separately prohibited. This assumption is required for the union bound in Theorem 3; Theorems 1–2 do not depend on it.
 
 These assumptions are visible deployment conditions, not claims about arbitrary LLM-agent systems.
 
@@ -530,6 +530,8 @@ Under Assumptions A1–A5, with probability at least \(1-\alpha\), simultaneousl
 
 **Remark.** This certificate is distribution-dependent through the held-out class-conditional margins and assumes the calibration and deployment distributions match for the relevant risk event. Cross-domain validity is evaluated empirically rather than silently assumed. A conformal-risk extension is future work unless completed before submission.
 
+**Remark (Pre-commitment mechanism and disclosure).** Assumption A5 requires a pre-commitment of both \((\Gamma, \{\alpha_j\})\) prior to calibration. Our reference implementation logs the SHA-256 hash of the serialized \((\Gamma, \{\alpha_j\})\) grid to an append-only experiment registry (`experiments/registry.csv`) before the calibration split is instantiated (function `commit_grid_hash` in `precedentguard/certificate.py`; enforcement at certification time in `assert_grid_committed`). This mechanism defends against unintentional post-hoc selection by the honest researcher but is a *self-attestation* baseline: a malicious insider with write access to the registry could re-order or forge commits. For **adversarial-verifiable** pre-commitment — e.g., under anonymous peer review or a public reproducibility audit — the registry hash should additionally be anchored to an external timestamping service (RFC 3161 TSA, OpenTimestamps, or a public git tag / GitHub release). We report which anchor mode is used in each experimental run.
+
 **Remark (Sidedness of the union bound).** We use *one-sided* Hoeffding, giving the multiplier \(2\): one upper-tail deviation per class, over \(|\Gamma|\) configurations and \(|\{\mathrm{FN},\mathrm{FP}\}|=2\) classes. Only the upper-tail deviation \(R^{\star}(\gamma)\le\widehat R(\gamma)+t\) is required for a valid upper-bound certificate. The two-sided variant would replace \(2|\Gamma|\) by \(4|\Gamma|\); the ratio
 
 \[
@@ -540,14 +542,21 @@ is independent of the calibration size \(n\) but depends on \(|\Gamma|\) and \(\
 
 ### 5.5 Imperfect semantic validators
 
-Suppose a policy attestation is wrong with probability at most \(\eta\) on deployment-matched data. A conservative extension adds validator risk to the unsafe certificate:
+We distinguish two notions of validator error rate and are explicit about which one this extension covers:
+
+- **Deployment-average validator error** \(\eta_{\mathrm{avg}} := \Pr_{x \sim \mathcal{D}}[\text{validator is wrong on } x]\), where \(\mathcal{D}\) is the deployment input distribution.
+- **Adversarial worst-case validator error** \(\eta_{\mathrm{adv}} := \sup_{a \in \mathcal{A}(\mathbf m)} \Pr[\text{validator is wrong on } a(x)]\), where the supremum is over the attack class permitted by the threat model.
+
+Suppose a policy attestation is wrong with probability at most \(\eta_{\mathrm{avg}}\) on deployment-matched data. A conservative extension adds this deployment-average validator risk to the unsafe certificate:
 
 \[
-U_{\mathrm{FN}}^{\eta}
-\le U_{\mathrm{FN}}+\eta,
+U_{\mathrm{FN}}^{\eta_{\mathrm{avg}}}
+\le U_{\mathrm{FN}}+\eta_{\mathrm{avg}},
 \]
 
-with a corresponding term for FPR if incorrect attestations can increase risk. This bound requires an independently validated estimate or certificate for \(\eta\); otherwise the main theorem must retain A4 as an explicit assumption.
+with a corresponding term for FPR if incorrect attestations can increase risk. This bound requires an independently validated estimate or certificate for \(\eta_{\mathrm{avg}}\); otherwise the main theorem must retain A4 as an explicit assumption.
+
+**Warning — the two rates are not exchangeable.** An adversary who probes the validator's failure modes can achieve \(\eta_{\mathrm{adv}} \gg \eta_{\mathrm{avg}}\); the additive form above is *not valid* under adversarial worst-case validator error. Certifying against \(\eta_{\mathrm{adv}}\) requires either (i) a validator with a certified robust-error bound of its own, or (ii) folding the validator's output channel \(Z\) into the observation \(O\) of Proposition 1 and re-deriving the TV lower bound over the joint channel. Both options are future work; the present paper reports \(\eta_{\mathrm{avg}}\) with explicit disclosure.
 
 ### 5.6 Observational-indistinguishability lower bound
 

@@ -126,7 +126,8 @@ def make_toy_eig(traj_id: str, is_unsafe: bool,
 
 
 def keyword_guard(eig: EIG, target_action_id: str,
-                  view: dict[str, EffectiveNode]) -> float:
+                  view: dict[str, EffectiveNode],
+                  precedents=None) -> float:
     """Score = intent-driven base + bounded memory modifier.
 
     Design (aligned with v0.2 Sec 4.2 evidence-separable base score):

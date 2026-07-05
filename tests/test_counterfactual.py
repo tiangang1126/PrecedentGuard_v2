@@ -67,7 +67,8 @@ def mk_eig() -> EIG:
 
 
 def deterministic_guard(eig: EIG, target_action_id: str,
-                        view: dict[str, EffectiveNode]) -> float:
+                        view: dict[str, EffectiveNode],
+                        precedents=None) -> float:
     """A deterministic mock guard that scores the sum of content-hash-derived
     values for all *present* mutable-ancestor nodes.
 

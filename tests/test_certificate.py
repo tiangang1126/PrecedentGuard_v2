@@ -200,6 +200,46 @@ class TestA5Enforcement(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             assert_grid_committed(post_hoc, registry_path=self.registry_path)
 
+    def test_a5_extended_alpha_grid_locking(self):
+        """A5-extended: (Gamma, alpha_grid) joint commitment.
+
+        Post-hoc alpha selection (choosing alpha after seeing calibration
+        outcomes) must be blocked equivalently to post-hoc Gamma selection.
+        """
+        grid = [_mk_cfg(0.5)]
+        alpha_committed = [0.05, 0.01]
+        commit_grid_hash(grid, registry_path=self.registry_path,
+                         alpha_grid=alpha_committed)
+        # Same (grid, alpha_grid): passes
+        assert_grid_committed(grid, registry_path=self.registry_path,
+                              alpha_grid=alpha_committed)
+        # Different alpha_grid: rejected (post-hoc alpha selection)
+        with self.assertRaises(RuntimeError):
+            assert_grid_committed(grid, registry_path=self.registry_path,
+                                  alpha_grid=[0.05, 0.10])
+        # Missing alpha_grid arg on assertion but committed with one: rejected
+        # (asserts a different, legacy hash)
+        with self.assertRaises(RuntimeError):
+            assert_grid_committed(grid, registry_path=self.registry_path,
+                                  alpha_grid=None)
+
+    def test_a5_extended_certify_rejects_out_of_grid_alpha(self):
+        """certify() with alpha_grid should reject an alpha not in the grid."""
+        cfg = _mk_cfg(theta=0.5)
+        grid = [cfg]
+        alpha_grid = [0.05, 0.01]
+        commit_grid_hash(grid, registry_path=self.registry_path,
+                         alpha_grid=alpha_grid)
+        cal = [MarginSample(1, 0.9), MarginSample(0, 0.1)]
+        # Requesting an alpha not in the committed set is a violation
+        with self.assertRaises(ValueError):
+            certify(
+                cal_samples=cal, config=cfg, grid=grid,
+                alpha=0.10,  # NOT in {0.05, 0.01}
+                alpha_grid=alpha_grid,
+                registry_path=self.registry_path,
+            )
+
 
 # ----------------------------------------------------------------------
 # End-to-end certify()

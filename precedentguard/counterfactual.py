@@ -148,12 +148,16 @@ class GuardInterface(Protocol):
     """Callable protocol for a runtime guard.
 
     Implementations bind to a frozen LLM backbone (v0.2 Section 4.1) and score
-    the risk of the target action given the intent and the intervened context.
+    the risk of the target action given the intent, the intervened context,
+    and (optionally) a set of retrieved precedent capsules.
 
     Contract
     --------
     - Deterministic (same inputs -> same output), OR
     - Stochastic with an explicit seed argument that callers may fix.
+    - `precedents` is optional; when None or empty the guard must behave as
+      if no precedents were considered. Implementations that don't understand
+      precedents should accept the parameter and ignore it.
     """
 
     def __call__(
@@ -161,6 +165,7 @@ class GuardInterface(Protocol):
         eig: EIG,
         target_action_id: str,
         view: dict[str, EffectiveNode],
+        precedents: Optional[list[Any]] = None,  # list[PrecedentCapsule]
     ) -> float:
         ...
 
@@ -183,6 +188,7 @@ def counterfactual_delta(
     control_content_hash: str = DEFAULT_CTRL_HASH,
     control_payload: Any = None,
     q: int = 1,
+    precedents: Optional[list[Any]] = None,
 ) -> float:
     """Compute the interventional influence delta_e of a single node.
 
@@ -233,9 +239,75 @@ def counterfactual_delta(
     clean_view = resolve_view(eig, clean)
     cf_view = resolve_view(eig, cf)
 
-    clean_scores = [guard(eig, target_action_id, clean_view) for _ in range(q)]
-    cf_scores = [guard(eig, target_action_id, cf_view) for _ in range(q)]
+    clean_scores = [
+        guard(eig, target_action_id, clean_view, precedents=precedents)
+        for _ in range(q)
+    ]
+    cf_scores = [
+        guard(eig, target_action_id, cf_view, precedents=precedents)
+        for _ in range(q)
+    ]
     return (sum(clean_scores) / q) - (sum(cf_scores) / q)
+
+
+def precedent_counterfactual_delta(
+    guard: GuardInterface,
+    eig: EIG,
+    target_action_id: str,
+    view: dict[str, EffectiveNode],
+    all_precedents: list[Any],
+    precedent_capsule_id: str,
+    *,
+    q: int = 1,
+) -> float:
+    """Compute the interventional influence delta_i of a single precedent
+    (v0.2 Section 4.4; parallel to evidence-node counterfactuals).
+
+    delta_i = mean_q(g(I, A, view, precedents including i))
+            - mean_q(g(I, A, view, precedents excluding i))
+
+    The intervention here is "ablation" of the precedent from the retrieved set,
+    holding the current-trajectory evidence view fixed.
+
+    Parameters
+    ----------
+    guard : GuardInterface
+        Scoring function; must accept `precedents` keyword.
+    eig : EIG
+        Clean execution graph.
+    target_action_id : str
+        Node id of the target action.
+    view : dict[str, EffectiveNode]
+        The current-trajectory evidence view, held constant.
+    all_precedents : list
+        The full list of retrieved precedent capsules (each has `.capsule_id`).
+    precedent_capsule_id : str
+        Identifier of the precedent to ablate.
+    q : int
+        Number of repeated evaluations.
+
+    Raises
+    ------
+    ValueError
+        If `precedent_capsule_id` is not present in `all_precedents`.
+    """
+    if q < 1:
+        raise ValueError(f"q must be >= 1, got {q}")
+
+    incl = list(all_precedents)
+    excl = [p for p in all_precedents if p.capsule_id != precedent_capsule_id]
+    if len(incl) == len(excl):
+        raise ValueError(
+            f"precedent capsule_id {precedent_capsule_id!r} not in provided list"
+        )
+
+    incl_scores = [
+        guard(eig, target_action_id, view, precedents=incl) for _ in range(q)
+    ]
+    excl_scores = [
+        guard(eig, target_action_id, view, precedents=excl) for _ in range(q)
+    ]
+    return (sum(incl_scores) / q) - (sum(excl_scores) / q)
 
 
 def counterfactual_deltas_for_ancestors(

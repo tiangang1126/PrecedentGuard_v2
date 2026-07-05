@@ -71,7 +71,8 @@ def constant_guard_factory(base: float, mem_effect: float, retr_effect: float):
     is added only if the corresponding node is present in the view."""
 
     def guard(eig: EIG, target_action_id: str,
-              view: dict[str, EffectiveNode]) -> float:
+              view: dict[str, EffectiveNode],
+              precedents=None) -> float:
         score = base
         if "mem" in view and view["mem"].is_present:
             score += mem_effect

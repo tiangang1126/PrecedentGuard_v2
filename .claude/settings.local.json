@@ -17,7 +17,10 @@
       "Bash(python scripts/day3_end_to_end_smoke.py)",
       "Bash(tee experiments/day3_smoke.log)",
       "Bash(PYTHONPATH=. python scripts/day3_end_to_end_smoke.py)",
-      "Bash(PYTHONPATH=. python -m unittest discover -s tests)"
+      "Bash(PYTHONPATH=. python -m unittest discover -s tests)",
+      "Bash(PYTHONPATH=. python -c \"import precedentguard\")",
+      "Bash(PYTHONPATH=. python -c ' *)",
+      "Bash(PYTHONPATH=. python -m unittest tests.test_guard_with_precedents -v)"
     ]
   }
 }

@@ -66,49 +66,97 @@ class CertificateConfig:
         return json.dumps(payload, sort_keys=True)
 
 
-def grid_hash(configs: Iterable[CertificateConfig]) -> str:
-    """SHA-256 hash of a fixed configuration grid (A5).
+def grid_hash(
+    configs: Iterable[CertificateConfig],
+    alpha_grid: Optional[Iterable[float]] = None,
+) -> str:
+    """SHA-256 hash of a fixed configuration grid, optionally joint with an
+    alpha grid (A5-extended per AI cold-read reviewer 2026-07-04, R3).
 
-    The grid must be materialized as a list before hashing so that iteration
-    order and content are deterministic.
+    Rationale: Assumption A5 as originally stated only pre-commits the config
+    grid $\\Gamma$. If a researcher post-hoc selects a favorable $\\alpha$ from
+    a candidate set after observing calibration outcomes, the union bound is
+    equally invalidated (selective inference on the confidence parameter).
+    Passing `alpha_grid` here binds both $(\\Gamma, \\alpha)$ into a single
+    committed hash.
+
+    Both grids must be materialized as concrete sequences (not generators) so
+    that iteration order is deterministic; the alpha grid is sorted before
+    hashing for order-invariance across equivalent commits.
     """
     concat = "\n".join(cfg.serialize() for cfg in configs)
+    if alpha_grid is not None:
+        sorted_alphas = sorted(float(a) for a in alpha_grid)
+        concat += "\nALPHA_GRID=" + ",".join(f"{a:.10f}" for a in sorted_alphas)
     return hashlib.sha256(concat.encode("utf-8")).hexdigest()
 
 
 REGISTRY_PATH_DEFAULT = "experiments/registry.csv"
 
 
-def commit_grid_hash(configs: list[CertificateConfig],
-                     registry_path: str = REGISTRY_PATH_DEFAULT,
-                     tag: str = "certificate_grid") -> str:
+def commit_grid_hash(
+    configs: list[CertificateConfig],
+    registry_path: str = REGISTRY_PATH_DEFAULT,
+    tag: str = "certificate_grid",
+    alpha_grid: Optional[list[float]] = None,
+) -> str:
     """Commit the grid hash to the experiment registry (A5).
 
-    Returns the hash so callers can log it in downstream artifacts. Appends a
-    row to registry.csv: timestamp, tag, |grid|, hash.
+    Parameters
+    ----------
+    configs : list[CertificateConfig]
+        The certificate configuration grid $\\Gamma$.
+    registry_path : str
+        Path to the append-only registry CSV.
+    tag : str
+        Row tag for downstream filtering.
+    alpha_grid : Optional[list[float]]
+        Optional pre-committed set of allowed $\\alpha$ values. When provided,
+        both $(\\Gamma, \\alpha\\text{-grid})$ are hashed jointly (A5-extended).
+        When None, only $\\Gamma$ is hashed (legacy behavior).
+
+    Returns
+    -------
+    str : the committed hash.
+
+    Notes
+    -----
+    Local CSV registry is only an honest-author baseline. For adversarial-
+    verifiable pre-commitment (e.g., anonymous peer review), pair this with an
+    external timestamp anchor: RFC 3161 TSA, OpenTimestamps
+    (Bitcoin-anchored), or a public git tag / GitHub release. This paper's
+    default deployment does not require such anchoring but the submission
+    disclose this limitation (main draft §5.4 remark).
     """
-    h = grid_hash(configs)
+    h = grid_hash(configs, alpha_grid=alpha_grid)
     path = Path(registry_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
     import datetime as _dt
     ts = _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    alpha_marker = (
+        "|".join(f"{a:.10f}" for a in sorted(alpha_grid))
+        if alpha_grid is not None else ""
+    )
     with path.open("a", encoding="utf-8", newline="") as f:
         if not exists:
-            f.write("timestamp,tag,grid_size,hash\n")
-        f.write(f"{ts},{tag},{len(configs)},{h}\n")
+            f.write("timestamp,tag,grid_size,hash,alpha_grid\n")
+        f.write(f"{ts},{tag},{len(configs)},{h},{alpha_marker}\n")
     return h
 
 
-def assert_grid_committed(configs: list[CertificateConfig],
-                          registry_path: str = REGISTRY_PATH_DEFAULT,
-                          tag: str = "certificate_grid") -> None:
-    """Raise if the given grid's hash is not present in the registry (A5).
+def assert_grid_committed(
+    configs: list[CertificateConfig],
+    registry_path: str = REGISTRY_PATH_DEFAULT,
+    tag: str = "certificate_grid",
+    alpha_grid: Optional[list[float]] = None,
+) -> None:
+    """Raise if the given (config, alpha) grid's hash is not in the registry.
 
-    Callers should invoke this after computing R_hat but before returning the
-    certificate — this catches the case where the grid was chosen post-hoc.
+    When `alpha_grid` is provided, this checks the extended A5 form: both
+    $\\Gamma$ AND the alpha grid must match what was committed.
     """
-    h = grid_hash(configs)
+    h = grid_hash(configs, alpha_grid=alpha_grid)
     path = Path(registry_path)
     if not path.exists():
         raise RuntimeError(
@@ -123,9 +171,13 @@ def assert_grid_committed(configs: list[CertificateConfig],
             if len(parts) >= 4 and parts[1] == tag:
                 hashes.add(parts[3])
     if h not in hashes:
+        alpha_note = (
+            f" (alpha_grid={sorted(alpha_grid)!r})"
+            if alpha_grid is not None else ""
+        )
         raise RuntimeError(
-            f"A5 violation: grid hash {h!r} not in registry (tag={tag!r}); "
-            f"grid was not pre-committed before calibration."
+            f"A5 violation: grid hash {h!r} not in registry (tag={tag!r}"
+            f"{alpha_note}); grid was not pre-committed before calibration."
         )
 
 
@@ -227,6 +279,7 @@ def certify(
     one_sided: bool = True,
     enforce_A5: bool = True,
     registry_path: str = REGISTRY_PATH_DEFAULT,
+    alpha_grid: Optional[list[float]] = None,
 ) -> Certificate:
     """Compute the Theorem 3 certificate for a single grid point.
 
@@ -239,7 +292,7 @@ def certify(
     grid : list[CertificateConfig]
         The full pre-committed configuration grid |Gamma|.
     alpha : float
-        Confidence parameter.
+        Confidence parameter used for this certificate.
     one_sided : bool
         Use one-sided (2|Gamma|) Hoeffding by default; set False for the
         conservative two-sided (4|Gamma|) variant.
@@ -247,6 +300,12 @@ def certify(
         If True, `assert_grid_committed` is called before computing R_hat.
     registry_path : str
         Path to the experiment registry for A5 verification.
+    alpha_grid : Optional[list[float]]
+        When provided, enforces the A5-extended pre-commitment: the caller's
+        chosen `alpha` MUST be in `alpha_grid`, and the (Gamma, alpha_grid)
+        joint hash MUST have been previously committed via
+        `commit_grid_hash(..., alpha_grid=...)`.
+        When None, legacy A5 (grid-only) enforcement applies.
 
     Returns
     -------
@@ -255,8 +314,16 @@ def certify(
     if config not in grid:
         raise ValueError(f"config not in provided grid; ensure it was pre-committed")
 
+    if alpha_grid is not None and alpha not in alpha_grid:
+        raise ValueError(
+            f"A5-extended violation: alpha={alpha} not in committed "
+            f"alpha_grid={sorted(alpha_grid)!r}. Post-hoc alpha selection is "
+            f"an equivalent selective-inference threat to post-hoc grid selection."
+        )
+
     if enforce_A5:
-        assert_grid_committed(grid, registry_path=registry_path)
+        assert_grid_committed(grid, registry_path=registry_path,
+                              alpha_grid=alpha_grid)
 
     # Compute rho_+, rho_-
     rho_plus, rho_minus = compute_rho(
