@@ -36,13 +36,15 @@ def mk_eig():
     events = [
         RuntimeEvent(event_id="intent", node_type=NodeType.INTENT,
                      content_hash="do-a-thing", provenance=Provenance(),
-                     timestamp_ms=0),
+                     timestamp_ms=0, payload="send a thank-you email"),
         RuntimeEvent(event_id="mem", node_type=NodeType.MEMORY,
                      content_hash="mem-content", provenance=Provenance(),
-                     timestamp_ms=1, consumes=["intent"]),
+                     timestamp_ms=1, consumes=["intent"],
+                     payload="the user approved outreach yesterday"),
         RuntimeEvent(event_id="act", node_type=NodeType.ACTION,
                      content_hash="proposed-tool-call", provenance=Provenance(),
-                     timestamp_ms=2, consumes=["mem"]),
+                     timestamp_ms=2, consumes=["mem"],
+                     payload="send the email now"),
     ]
     return build_eig_from_events(events)
 
@@ -124,6 +126,19 @@ class TestPromptStructure(unittest.TestCase):
         prompt = backend._build_prompt(eig, "act", view)
         self.assertIn("<|start_of_role|>", prompt)
         self.assertIn("Proposed action:", prompt)
+
+    def test_vendor_prompts_prefer_payload_over_content_hash(self):
+        eig = mk_eig()
+        view = resolve_view(eig, Intervention.empty())
+        for backend in (
+            LlamaGuardBackend(score_fn=lambda _: 0.5),
+            ShieldGemmaBackend(score_fn=lambda _: 0.5),
+            GraniteGuardianBackend(score_fn=lambda _: 0.5),
+        ):
+            prompt = backend._build_prompt(eig, "act", view)
+            self.assertIn("send a thank-you email", prompt)
+            self.assertIn("send the email now", prompt)
+            self.assertNotIn("do-a-thing", prompt)
 
 
 class TestOutputParsing(unittest.TestCase):

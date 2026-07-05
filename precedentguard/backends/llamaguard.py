@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from precedentguard.backends.base import HFGuardBackend
+from precedentguard.backends.base import HFGuardBackend, node_prompt_text
 from precedentguard.counterfactual import EffectiveNode
 from precedentguard.eig import EIG
 from precedentguard.types import NodeType
@@ -47,7 +47,7 @@ class LlamaGuardBackend(HFGuardBackend):
         """
         intent_ids = eig.nodes_by_type(NodeType.INTENT)
         user_text = (
-            eig.nodes[intent_ids[0]].content_hash if intent_ids else "<no intent>"
+            node_prompt_text(eig.nodes[intent_ids[0]]) if intent_ids else "<no intent>"
         )
         evidence_lines = []
         for pid in sorted(eig.mutable_ancestors_of(target_action_id)):
@@ -55,9 +55,9 @@ class LlamaGuardBackend(HFGuardBackend):
             if eff is None or not eff.is_present:
                 continue
             node = eig.nodes[pid]
-            evidence_lines.append(f"- {node.node_type.value}: {eff.content_hash}")
+            evidence_lines.append(f"- {node.node_type.value}: {node_prompt_text(eff)}")
         action_text = (
-            eig.nodes[target_action_id].content_hash
+            node_prompt_text(eig.nodes[target_action_id])
             if target_action_id in eig.nodes
             else "<no action>"
         )

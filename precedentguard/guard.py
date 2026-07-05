@@ -6,13 +6,12 @@ PrecedentGuard runtime decision layer — implements Algorithm 1 (v0.2 Section 4
 Five-stage pipeline:
   1. Build/receive EIG from trusted runtime instrumentation (A1).
   2. Select decision-relevant evidence parents (mutable ancestors of target action).
-  3. [Deferred to Day 4-5] Retrieve precedent capsules — Day 3 uses empty set.
-  4. Estimate bounded counterfactual contributions (delta_e per parent).
+  3. Retrieve precedent capsules when a precedent_store is configured.
+  4. Estimate bounded counterfactual contributions (delta_e per parent, delta_i per precedent).
   5. Aggregate under directional trust constraints + calibrated threshold.
 
-Precedent retrieval (v0.2 Section 4.3) is deferred to a later iteration; the
-current implementation focuses on the current-trajectory evidence pipeline, which
-is sufficient for the Day 3 end-to-end smoke test.
+The current implementation supports both precedent-free execution and the full
+precedent-aware decision path used in v0.2 Section 4.3-4.8.
 """
 
 from __future__ import annotations
@@ -42,6 +41,13 @@ from precedentguard.retrieval import (
     SimplePrecedentStore,
 )
 from precedentguard.types import InterventionOp, NodeType
+
+
+def _node_query_text(node: Any) -> str:
+    payload = getattr(node, "payload", None)
+    if isinstance(payload, str) and payload.strip():
+        return payload.strip()
+    return getattr(node, "content_hash", "")
 
 
 class Verdict(Enum):
@@ -178,11 +184,11 @@ class PrecedentGuard:
         if query_summary is None:
             intent_ids = eig.nodes_by_type(NodeType.INTENT)
             query_summary = (
-                eig.nodes[intent_ids[0]].content_hash if intent_ids else ""
+                _node_query_text(eig.nodes[intent_ids[0]]) if intent_ids else ""
             )
         if query_action is None:
             query_action = (
-                eig.nodes[target_action_id].content_hash
+                _node_query_text(eig.nodes[target_action_id])
                 if target_action_id in eig.nodes else ""
             )
         return self.precedent_store.retrieve(

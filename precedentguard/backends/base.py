@@ -35,6 +35,31 @@ from precedentguard.types import NodeType
 ScoreFn = Callable[[str], float]
 
 
+def _stringify_payload(payload: Any) -> Optional[str]:
+    """Render payload to a prompt-friendly string when possible."""
+    if payload is None:
+        return None
+    if isinstance(payload, str):
+        text = payload.strip()
+        return text or None
+    if isinstance(payload, (int, float, bool)):
+        return str(payload)
+    return None
+
+
+def node_prompt_text(node: Any) -> str:
+    """Prefer human-readable payload, fall back to content_hash.
+
+    Real backbone evaluation should expose the actual text content whenever it
+    is available in the EIG payload. The content_hash remains as a deterministic
+    fallback for toy or privacy-preserving settings.
+    """
+    payload_text = _stringify_payload(getattr(node, "payload", None))
+    if payload_text is not None:
+        return payload_text
+    return getattr(node, "content_hash", "")
+
+
 @dataclass
 class HFGuardBackend:
     """Base class for HuggingFace-hosted guard models.
@@ -107,16 +132,16 @@ class HFGuardBackend:
         parts = [f"[GUARD_ROLE] risk assessment for action `{target_action_id}`."]
         intent_ids = eig.nodes_by_type(NodeType.INTENT)
         if intent_ids:
-            parts.append(f"[INTENT] {eig.nodes[intent_ids[0]].content_hash}")
+            parts.append(f"[INTENT] {node_prompt_text(eig.nodes[intent_ids[0]])}")
         for pid in sorted(eig.mutable_ancestors_of(target_action_id)):
             eff = view.get(pid)
             if eff is None or not eff.is_present:
                 continue
             node = eig.nodes[pid]
-            parts.append(f"[{node.node_type.value.upper()}] {eff.content_hash}")
+            parts.append(f"[{node.node_type.value.upper()}] {node_prompt_text(eff)}")
         if target_action_id in eig.nodes:
             parts.append(
-                f"[ACTION] {eig.nodes[target_action_id].content_hash}"
+                f"[ACTION] {node_prompt_text(eig.nodes[target_action_id])}"
             )
         if precedents:
             for i, p in enumerate(precedents):

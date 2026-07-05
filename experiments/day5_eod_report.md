@@ -110,6 +110,8 @@ PrecedentGuard_pro2/
 
 **目标（B6 消灭进入 §7 实证）：** 3 backbones × 3 suites × 3 attack budgets × 3 seeds sweep
 
+> **实现状态说明：** 本节以下列出的 `experiment_plan_v1.yaml`、`gen_controlled_intervention_suite.py`、`agentdojo.py`、`registry.csv`、`certificate_grid.yaml` 是 **Day 6 待落地交付物**，不是当前工作区里已经存在的文件。执行前必须先检查文件是否已创建，避免按计划文档误触发不存在的脚本。
+
 ### Day 6（明日）子任务
 
 1. **09:00-11:00 — 实验蓝图 v1.0 落地**
