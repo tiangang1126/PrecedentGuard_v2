@@ -172,6 +172,8 @@ class PrecedentGuard:
     precedent_store: Optional[SimplePrecedentStore] = None
     precedent_top_k: int = 5
     precedent_retrieval_strategy: str = "vanilla"
+    precedent_safe_beta_scale: float = 1.0
+    precedent_unsafe_beta_scale: float = 1.0
 
     def _base_view(self, eig: EIG) -> dict[str, EffectiveNode]:
         """Minimal context for base score B(I, A): ablate all mutable evidence."""
@@ -269,12 +271,13 @@ class PrecedentGuard:
             },
         }
 
-        # Stage 3: base score B(I, A) on the mutable-ablated context, with
-        # precedents held CONSTANT (they are inputs to the base setup).
+        # Stage 3: base score B(I, A) on the mutable-ablated context only.
+        # Retrieved precedents are excluded here so their effect is accounted
+        # for exactly once through delta_i aggregation below.
         base_view = self._base_view(eig)
         base_guard_started = time.perf_counter()
         base_score = float(self.base_guard(
-            eig, target_action_id, base_view, precedents=retrieved_capsules,
+            eig, target_action_id, base_view, precedents=[],
         ))
         timing_ms["base_guard_ms"] = (
             time.perf_counter() - base_guard_started
@@ -342,12 +345,17 @@ class PrecedentGuard:
                 current_epoch_ms=self.attestation_ctx.current_epoch_ms,
                 accepted_policy_versions=self.attestation_ctx.accepted_policy_versions,
             )
+            label_scale = (
+                self.precedent_unsafe_beta_scale
+                if cap.audited_label == 1
+                else self.precedent_safe_beta_scale
+            )
             contribs.append(Contribution(
                 node_id=f"precedent:{cap.capsule_id}",
                 node_type=NodeType.PRECEDENT,
                 raw_delta=delta_i,
                 is_attested=is_attested,
-                beta=rp.weight,
+                beta=rp.weight * label_scale,
             ))
         timing_ms["precedent_counterfactual_ms"] = (
             time.perf_counter() - precedent_cf_started

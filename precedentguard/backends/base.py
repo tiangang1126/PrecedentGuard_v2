@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any, Callable, Optional
 
 from precedentguard.counterfactual import EffectiveNode
@@ -33,6 +34,9 @@ from precedentguard.types import NodeType
 
 # A raw prompt-to-score function; used when transformers is not desired.
 ScoreFn = Callable[[str], float]
+
+if TYPE_CHECKING:
+    import torch
 
 
 def _stringify_payload(payload: Any) -> Optional[str]:
@@ -95,6 +99,7 @@ class HFGuardBackend:
     _model: Any = field(default=None, init=False, repr=False)
     _tokenizer: Any = field(default=None, init=False, repr=False)
     _prompt_cache: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _input_device: Any = field(default=None, init=False, repr=False)
 
     # -------------- Public interface (matches GuardInterface protocol) ---------
 
@@ -227,13 +232,47 @@ class HFGuardBackend:
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.model_id, cache_dir=cache,
         )
-        self._model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            torch_dtype=dtype_map.get(self.dtype, torch.float16),
-            device_map=self.device,
-            cache_dir=cache,
-        )
+        load_kwargs = {
+            "torch_dtype": dtype_map.get(self.dtype, torch.float16),
+            "cache_dir": cache,
+        }
+        if self.device == "auto":
+            load_kwargs["device_map"] = "auto"
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                **load_kwargs,
+            )
+            self._input_device = self._resolve_auto_input_device(torch)
+        else:
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                **load_kwargs,
+            )
+            self._model.to(self.device)
+            self._input_device = torch.device(self.device)
         self._model.eval()
+
+    def _resolve_auto_input_device(self, torch_module: Any) -> Any:
+        """Infer the first execution device chosen by HF/Accelerate auto placement."""
+        hf_device_map = getattr(self._model, "hf_device_map", None)
+        if isinstance(hf_device_map, dict):
+            for target in hf_device_map.values():
+                if target in (None, "disk"):
+                    continue
+                if isinstance(target, int):
+                    return torch_module.device(f"cuda:{target}")
+                if isinstance(target, str):
+                    return torch_module.device(target)
+        model_device = getattr(self._model, "device", None)
+        if model_device is not None:
+            return model_device
+        return None
+
+    def _move_inputs_to_model_device(self, inputs: dict[str, "torch.Tensor"]) -> dict[str, "torch.Tensor"]:
+        """Move tokenized inputs only when a concrete execution device is set."""
+        if self._input_device is None:
+            return inputs
+        return {k: v.to(self._input_device) for k, v in inputs.items()}
 
     def _generate(self, prompt: str) -> str:
         """Generate a short completion from the loaded model."""
@@ -244,8 +283,7 @@ class HFGuardBackend:
             truncation=True,
             max_length=self.max_input_tokens,
         )
-        if self.device != "cpu":
-            inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
+        inputs = self._move_inputs_to_model_device(inputs)
         with torch.no_grad():
             out = self._model.generate(
                 **inputs,

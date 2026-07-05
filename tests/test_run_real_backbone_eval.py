@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -161,6 +162,39 @@ class RunRealBackboneEvalTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             store.get(MODULE.precedent_capsule_id(rows[0]))
         self.assertIsNotNone(store.get(MODULE.precedent_capsule_id(rows[1])))
+
+    def test_harmful_precedent_capsule_is_also_attested(self):
+        rows = [
+            {"id": "ex-h", "prompt": "harm", "subset": "harmful", "name": "", "trajectory": []},
+        ]
+        store = MODULE.make_precedent_store(rows, scope="agentharm")
+        capsule = store.get(MODULE.precedent_capsule_id(rows[0]))
+        self.assertTrue(
+            capsule.trust.is_attested(
+                current_scope="agentharm",
+                accepted_policy_versions=frozenset({"v1"}),
+            )
+        )
+
+    def test_make_backend_honors_device_and_dtype_env(self):
+        original_device = os.environ.get("PG_BACKEND_DEVICE")
+        original_dtype = os.environ.get("PG_BACKEND_DTYPE")
+        try:
+            os.environ["PG_BACKEND_DEVICE"] = "cuda"
+            os.environ["PG_BACKEND_DTYPE"] = "float16"
+            backend = MODULE.make_backend("llama_guard", "meta-llama/Llama-Guard-3-1B")
+        finally:
+            if original_device is None:
+                os.environ.pop("PG_BACKEND_DEVICE", None)
+            else:
+                os.environ["PG_BACKEND_DEVICE"] = original_device
+            if original_dtype is None:
+                os.environ.pop("PG_BACKEND_DTYPE", None)
+            else:
+                os.environ["PG_BACKEND_DTYPE"] = original_dtype
+
+        self.assertEqual(backend.device, "cuda")
+        self.assertEqual(backend.dtype, "float16")
 
     def test_script_outputs_timing_and_retrieval_diagnostics(self):
         dataset_rows = [

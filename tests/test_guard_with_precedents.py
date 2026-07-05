@@ -231,30 +231,74 @@ class TestPrecedentSPGIntegration(unittest.TestCase):
         # base=0.4 (with all evidence/precedents present)
         # mem_effect=0.1, precedent_effect_per_item=0.05
         # With 2 precedents present: base_guard = 0.4 + 0.1 + 2*0.05 = 0.6
-        # For BASE view (mutable ablated): 0.4 + 0 + 2*0.05 = 0.5
-        # delta_mem = 0.6 - 0.5 = 0.1 (ablate mem; precedents stay)
+        # For BASE view (mutable ablated, no precedents in B(I,A)): 0.4
+        # delta_mem = 0.6 - 0.5 = 0.1 (ablate mem; precedents stay constant)
         # For precedent ablation of c1: (0.6) - (0.4+0.1+1*0.05) = 0.05
         # After type-clip (mem cap=0.20, precedent cap=0.15): 0.1, 0.05 (no clip)
         # All untrusted -> pg_clip: max(0,·) preserves positive values
         # weighted_sum: 1.0*0.1 + w1*0.05 + w2*0.05  where w1+w2=1 uniformly => 0.5 each
         # => 0.1 + 0.5*0.05 + 0.5*0.05 = 0.1 + 0.05 = 0.15
         # outer_clip within [-1,1]: 0.15
-        # base_score = 0.5, S_PG = 0.5 + 0.15 = 0.65
+        # base_score = 0.4, S_PG = 0.4 + 0.15 = 0.55
         guard = guard_with_precedent_effect(0.4, 0.1, 0.05)
         pg = PrecedentGuard(base_guard=guard, caps_by_type=CAPS,
                             threshold=0.5, precedent_store=store,
                             precedent_top_k=2)
         decision = pg.decide(mk_eig(), target_action_id="act")
 
-        self.assertAlmostEqual(decision.base_score, 0.5, places=6)
+        self.assertAlmostEqual(decision.base_score, 0.4, places=6)
         self.assertAlmostEqual(decision.per_parent_delta["mem"], 0.1, places=6)
         self.assertAlmostEqual(decision.per_precedent_delta["c1"], 0.05,
                                places=6)
         self.assertAlmostEqual(decision.per_precedent_delta["c2"], 0.05,
                                places=6)
         self.assertAlmostEqual(decision.z_after_outer, 0.15, places=6)
-        self.assertAlmostEqual(decision.s_pg, 0.65, places=6)
+        self.assertAlmostEqual(decision.s_pg, 0.55, places=6)
         self.assertEqual(decision.verdict, Verdict.BLOCK)
+
+    def test_base_score_excludes_precedent_context(self):
+        store = SimplePrecedentStore()
+        store.add(mk_capsule("c1", label=1))
+        store.add(mk_capsule("c2", label=0))
+
+        guard = guard_with_precedent_effect(0.4, 0.0, 0.05)
+        pg = PrecedentGuard(
+            base_guard=guard,
+            caps_by_type=CAPS,
+            threshold=0.5,
+            precedent_store=store,
+            precedent_top_k=2,
+        )
+        decision = pg.decide(mk_eig(), target_action_id="act")
+
+        self.assertAlmostEqual(decision.base_score, 0.4, places=6)
+        self.assertAlmostEqual(decision.per_precedent_delta["c1"], 0.05, places=6)
+        self.assertAlmostEqual(decision.per_precedent_delta["c2"], 0.05, places=6)
+
+    def test_label_aware_precedent_beta_scales_affect_aggregation(self):
+        store = SimplePrecedentStore()
+        store.add(mk_capsule("safe-cap", label=0, attested=True))
+        store.add(mk_capsule("unsafe-cap", label=1, attested=True))
+
+        guard = guard_with_precedent_effect(0.4, 0.0, 0.05)
+        pg = PrecedentGuard(
+            base_guard=guard,
+            caps_by_type=CAPS,
+            threshold=0.5,
+            precedent_store=store,
+            precedent_top_k=2,
+            precedent_safe_beta_scale=2.0,
+            precedent_unsafe_beta_scale=0.5,
+            attestation_ctx=AttestationContext(
+                current_scope="default",
+                accepted_policy_versions=frozenset({"v1"}),
+            ),
+        )
+        decision = pg.decide(mk_eig(), target_action_id="act")
+
+        # Each precedent delta is +0.05 and weights are 0.5/0.5.
+        # Scaled contribution = 0.5*2.0*0.05 + 0.5*0.5*0.05 = 0.0625
+        self.assertAlmostEqual(decision.z_after_outer, 0.0625, places=6)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 import time
@@ -250,11 +251,11 @@ def make_precedent_store(rows: Iterable[dict], *, scope: str) -> SimplePrecedent
     for row in rows:
         is_safe = row.get("subset") != "harmful"
         trust = Provenance(
-            origin_id="audit-validator" if is_safe else "historical-audit",
-            signature_valid=is_safe,
-            semantic_authorization=is_safe,
-            scope=scope if is_safe else None,
-            policy_version="v1" if is_safe else None,
+            origin_id="audit-validator",
+            signature_valid=True,
+            semantic_authorization=True,
+            scope=scope,
+            policy_version="v1",
         )
         retrieval_summary, retrieval_action = build_retrieval_texts(
             row["prompt"],
@@ -447,12 +448,14 @@ def make_query_texts(prompt: str, trajectory: list[dict[str, Any]]) -> tuple[str
 
 
 def make_backend(name: str, model_id: str):
+    device = os.environ.get("PG_BACKEND_DEVICE", "auto")
+    dtype = os.environ.get("PG_BACKEND_DTYPE", "float16")
     if name == "llama_guard":
-        return LlamaGuardBackend(model_id=model_id)
+        return LlamaGuardBackend(model_id=model_id, device=device, dtype=dtype)
     if name == "shieldgemma":
-        return ShieldGemmaBackend(model_id=model_id)
+        return ShieldGemmaBackend(model_id=model_id, device=device, dtype=dtype)
     if name == "granite_guardian":
-        return GraniteGuardianBackend(model_id=model_id)
+        return GraniteGuardianBackend(model_id=model_id, device=device, dtype=dtype)
     raise ValueError(f"unsupported backend: {name}")
 
 
@@ -462,6 +465,8 @@ def make_guard(
     store: SimplePrecedentStore | None,
     top_k: int,
     retrieval_strategy: str,
+    precedent_safe_beta_scale: float,
+    precedent_unsafe_beta_scale: float,
 ) -> PrecedentGuard:
     caps = {
         NodeType.MEMORY: symmetric_caps(0.20),
@@ -477,6 +482,8 @@ def make_guard(
         precedent_store=store,
         precedent_top_k=top_k,
         precedent_retrieval_strategy=retrieval_strategy,
+        precedent_safe_beta_scale=precedent_safe_beta_scale,
+        precedent_unsafe_beta_scale=precedent_unsafe_beta_scale,
         attestation_ctx=AttestationContext(
             current_scope="agentharm",
             accepted_policy_versions=frozenset({"v1"}),
@@ -517,6 +524,8 @@ def main() -> None:
         default="vanilla",
         choices=["vanilla", "label_balanced"],
     )
+    parser.add_argument("--precedent-safe-beta-scale", type=float, default=1.0)
+    parser.add_argument("--precedent-unsafe-beta-scale", type=float, default=1.0)
     parser.add_argument("--output-file", default="")
     args = parser.parse_args()
 
@@ -536,6 +545,8 @@ def main() -> None:
         store=None,
         top_k=args.precedent_top_k,
         retrieval_strategy=args.retrieval_strategy,
+        precedent_safe_beta_scale=args.precedent_safe_beta_scale,
+        precedent_unsafe_beta_scale=args.precedent_unsafe_beta_scale,
     )
 
     out_path = (
@@ -545,7 +556,8 @@ def main() -> None:
     )
 
     with out_path.open("w", encoding="utf-8") as out:
-        for row in rows:
+        total_rows = len(rows)
+        for idx, row in enumerate(rows, start=1):
             eig, action_id = build_eig(
                 row["id"],
                 row["prompt"],
@@ -572,6 +584,8 @@ def main() -> None:
                     store=precedent_store,
                     top_k=args.precedent_top_k,
                     retrieval_strategy=args.retrieval_strategy,
+                    precedent_safe_beta_scale=args.precedent_safe_beta_scale,
+                    precedent_unsafe_beta_scale=args.precedent_unsafe_beta_scale,
                 )
                 retrieval_diagnostics = precedent_store.retrieval_debug_summary(
                     query_summary=query_summary,
@@ -693,6 +707,8 @@ def main() -> None:
                         "precedent_top_k": args.precedent_top_k,
                         "retrieval_probe_top_k": args.retrieval_probe_top_k,
                         "retrieval_strategy": args.retrieval_strategy,
+                        "precedent_safe_beta_scale": args.precedent_safe_beta_scale,
+                        "precedent_unsafe_beta_scale": args.precedent_unsafe_beta_scale,
                         "prompt_text": row["prompt"],
                         "action_text": query_action,
                         "trajectory_node_count": max(len(eig.nodes) - 2, 0),
@@ -708,6 +724,12 @@ def main() -> None:
                     ensure_ascii=True,
                 )
                 + "\n"
+            )
+            out.flush()
+            print(
+                f"[{idx}/{total_rows}] example_id={row['id']} verdict={decision_payload['verdict']} "
+                f"base_score={decision_payload['base_score']:.6f} s_pg={decision_payload['s_pg']:.6f}",
+                flush=True,
             )
 
     print(out_path)
