@@ -17,8 +17,10 @@
 #   PRECEDENT_TOP_K       2
 #   RETRIEVAL_PROBE_TOP_K 5
 #   RETRIEVAL_STRATEGY    label_balanced            {vanilla, label_balanced}
-#   PRECEDENT_SAFE_BETA   2.0
-#   PRECEDENT_UNSAFE_BETA 0.5
+#   PG_BACKEND_DEVICE     auto                      auto | cuda | cpu
+#   PG_BACKEND_DTYPE      float16                   float16 | bfloat16 | float32
+#   PRECEDENT_SAFE_BETA_SCALE   2.0
+#   PRECEDENT_UNSAFE_BETA_SCALE 0.5
 #   PREFIX                day7_agentharm_full
 #
 # Assumption A5 (grid pre-commitment): pair this run with commit_grid_hash
@@ -32,6 +34,8 @@ cd "$ROOT_DIR"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts/day6}"
 BACKEND_NAME="${BACKEND_NAME:-llama_guard}"
 MODEL_ID="${MODEL_ID:-meta-llama/Llama-Guard-3-1B}"
+PG_BACKEND_DEVICE="${PG_BACKEND_DEVICE:-auto}"
+PG_BACKEND_DTYPE="${PG_BACKEND_DTYPE:-float16}"
 LIMIT="${LIMIT:-200}"
 PRECEDENT_TOP_K="${PRECEDENT_TOP_K:-2}"
 RETRIEVAL_PROBE_TOP_K="${RETRIEVAL_PROBE_TOP_K:-5}"
@@ -41,9 +45,12 @@ PRECEDENT_UNSAFE_BETA_SCALE="${PRECEDENT_UNSAFE_BETA_SCALE:-0.5}"
 PREFIX="${PREFIX:-day7_agentharm_full}"
 
 mkdir -p "$ARTIFACT_DIR"
+export PG_BACKEND_DEVICE
+export PG_BACKEND_DTYPE
 
 echo "[Day 7 full sweep] backend=$BACKEND_NAME model=$MODEL_ID limit=$LIMIT"
 echo "[Day 7 full sweep] artifact_dir=$ARTIFACT_DIR prefix=$PREFIX"
+echo "[Day 7 full sweep] device=$PG_BACKEND_DEVICE dtype=$PG_BACKEND_DTYPE"
 echo "[Day 7 full sweep] strategy=$RETRIEVAL_STRATEGY beta_safe=$PRECEDENT_SAFE_BETA_SCALE beta_unsafe=$PRECEDENT_UNSAFE_BETA_SCALE"
 echo
 
