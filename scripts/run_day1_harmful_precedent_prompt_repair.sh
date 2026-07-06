@@ -21,6 +21,8 @@ export PG_BACKEND_DEVICE
 export PG_BACKEND_DTYPE
 
 OUTFILE="${OUTFILE:-$ARTIFACT_DIR/day1_pg_harmful_${LIMIT}_label_balanced_prompt_repaired_v3.jsonl}"
+BACKBONE_FILE="${BACKBONE_FILE:-$ARTIFACT_DIR/day1_triplet_logit_repaired_backbone_only_harmful_${LIMIT}.jsonl}"
+BEFORE_FILE="${BEFORE_FILE:-$ARTIFACT_DIR/day1_triplet_logit_repaired_pg_with_precedents_harmful_${LIMIT}.jsonl}"
 
 python scripts/run_real_backbone_eval.py \
   --mode pg_with_precedents \
@@ -36,6 +38,6 @@ python scripts/run_real_backbone_eval.py \
   --output-file "$OUTFILE"
 
 python scripts/analyze_day1_precedent_prompt_repair.py \
-  --backbone "$ARTIFACT_DIR/day1_triplet_logit_repaired_backbone_only_harmful_${LIMIT}.jsonl" \
-  --before "$ARTIFACT_DIR/day1_triplet_logit_repaired_pg_with_precedents_harmful_${LIMIT}.jsonl" \
+  --backbone "$BACKBONE_FILE" \
+  --before "$BEFORE_FILE" \
   --after "$OUTFILE"

@@ -211,6 +211,43 @@ Priority order (cut from bottom first):
 
 ---
 
+## Current Empirical Status
+
+### Verified narrative on matched stop-loss slices
+
+- The highest-value empirical conclusion is now **method-level**, not yet full-slice leaderboard-level.
+- Root cause has been narrowed to the `pg_with_precedents -> base_guard` prompt-layer injection protocol for unsafe precedents.
+- Retrieval diversification and logit scoring were necessary enablers, but they were not the final bottleneck.
+
+### Verified slice evidence
+
+- `harmless_benign 10`
+  - `backbone_only`: `block=9, allow=1`, `mean_base_score=0.684639`
+  - repaired `pg_with_precedents`: `block=6, allow=4`, `mean_base_score=0.684639`, `mean_s_pg=0.567950`, `mean_pg_delta=-0.116689`
+  - interpretation: benign-side base inflation removed; precedent signal still active
+- `harmful 10`
+  - `backbone_only`: `block=10, allow=0`, `mean_base_score=0.958933`
+  - repaired `pg_with_precedents`: `block=10, allow=0`, `mean_base_score=0.958933`, `mean_s_pg=0.911012`, `mean_pg_delta=-0.047921`
+  - interpretation: harmful-side blocking preserved after the same repair
+
+### Writing rule for the draft
+
+- Write this as:
+  - **"prompt-layer unsafe-precedent protocol repair removes benign-side base-score inflation without sacrificing harmful blocking on matched stop-loss slices."**
+- Do **not** yet write this as:
+  - full-benchmark SOTA
+  - certificate-valid full-slice success
+  - final Table 1 claim
+- Current companion note:
+  - `PrecedentGuard_AAAI27_Experiment_Narrative_Update_20260706.md`
+
+### Immediate next execution
+
+- Run refreshed tri-mode `10+10` under the repaired branch
+- Then decide whether the branch is stable enough to promote to the next frozen experiment tier
+
+---
+
 ## What to Add for Oral Quality (if ahead of schedule)
 
 In priority order:
