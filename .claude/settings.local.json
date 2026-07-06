@@ -24,7 +24,9 @@
       "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py)",
       "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_repaired --limit 10)",
       "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3 --limit 10)",
-      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit --limit 10)"
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit --limit 10)",
+      "Bash(grep -v \".log$\")",
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3_dev50 --limit 50)"
     ]
   }
 }
