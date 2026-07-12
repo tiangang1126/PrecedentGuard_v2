@@ -240,6 +240,29 @@ class TestA5Enforcement(unittest.TestCase):
                 registry_path=self.registry_path,
             )
 
+    def test_certify_accepts_nondefault_registry_tag(self):
+        """certify() should verify A5 against the caller-specified registry tag."""
+        cfg = _mk_cfg(theta=0.5)
+        grid = [cfg]
+        alpha_grid = [0.05]
+        commit_grid_hash(
+            grid,
+            registry_path=self.registry_path,
+            tag="certificate_grid_day8",
+            alpha_grid=alpha_grid,
+        )
+        cal = [MarginSample(1, 0.9), MarginSample(0, 0.1)]
+        cert = certify(
+            cal_samples=cal,
+            config=cfg,
+            grid=grid,
+            alpha=0.05,
+            alpha_grid=alpha_grid,
+            registry_path=self.registry_path,
+            registry_tag="certificate_grid_day8",
+        )
+        self.assertIsInstance(cert, Certificate)
+
 
 # ----------------------------------------------------------------------
 # End-to-end certify()

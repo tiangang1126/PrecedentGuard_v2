@@ -229,28 +229,79 @@ class HFGuardBackend:
             "float32": torch.float32,
         }
         cache = str(self.cache_dir) if self.cache_dir else None
-        self._tokenizer = AutoTokenizer.from_pretrained(
-            self.model_id, cache_dir=cache,
-        )
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                self.model_id, cache_dir=cache,
+            )
+        except Exception as exc:
+            self._raise_model_loading_error(exc)
         load_kwargs = {
-            "torch_dtype": dtype_map.get(self.dtype, torch.float16),
+            "dtype": dtype_map.get(self.dtype, torch.float16),
             "cache_dir": cache,
         }
-        if self.device == "auto":
-            load_kwargs["device_map"] = "auto"
-            self._model = AutoModelForCausalLM.from_pretrained(
-                self.model_id,
-                **load_kwargs,
-            )
-            self._input_device = self._resolve_auto_input_device(torch)
-        else:
-            self._model = AutoModelForCausalLM.from_pretrained(
-                self.model_id,
-                **load_kwargs,
-            )
-            self._model.to(self.device)
-            self._input_device = torch.device(self.device)
+        try:
+            if self.device == "auto":
+                load_kwargs["device_map"] = "auto"
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    self.model_id,
+                    **load_kwargs,
+                )
+                self._input_device = self._resolve_auto_input_device(torch)
+            else:
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    self.model_id,
+                    **load_kwargs,
+                )
+                self._model.to(self.device)
+                self._input_device = torch.device(self.device)
+        except Exception as exc:
+            self._raise_model_loading_error(exc)
         self._model.eval()
+
+    def _raise_model_loading_error(self, exc: Exception) -> None:
+        message = str(exc)
+        lowered = message.lower()
+        if (
+            "gated repo" in lowered
+            or "cannot access gated repo" in lowered
+            or "awaiting a review" in lowered
+            or ("403" in lowered and "huggingface" in lowered)
+            or ("403" in lowered and "hf-mirror" in lowered)
+        ):
+            raise RuntimeError(
+                "MODEL_ACCESS_BLOCKED: "
+                f"Cannot load {self.model_id!r}. "
+                "The Hugging Face repository is gated or access has not been approved. "
+                "Request access on the model card, use a locally cached copy, or skip this backend "
+                "and continue the experiment with accessible backbones."
+            ) from exc
+        if (
+            "repository not found" in lowered
+            or "is not a valid model identifier" in lowered
+            or ("404" in lowered and "huggingface" in lowered)
+            or ("404" in lowered and "hf-mirror" in lowered)
+        ):
+            raise RuntimeError(
+                "MODEL_REPO_NOT_FOUND: "
+                f"Cannot load {self.model_id!r}. "
+                "The configured Hugging Face repo_id does not exist. "
+                "Fix the model identifier or point MODEL_ID to a valid local model directory "
+                "before rerunning this backend."
+            ) from exc
+        if (
+            "error while deserializing header" in lowered
+            or "incomplete metadata, file not fully covered" in lowered
+        ):
+            raise RuntimeError(
+                "MODEL_ARTIFACT_CORRUPTED: "
+                f"Cannot load {self.model_id!r}. "
+                "A local safetensors shard is incomplete or corrupted. "
+                "Re-download the model files or point MODEL_ID to a validated local model directory "
+                "before rerunning this backend."
+            ) from exc
+        raise RuntimeError(
+            f"Failed to load backend model {self.model_id!r}: {message}"
+        ) from exc
 
     def _resolve_auto_input_device(self, torch_module: Any) -> Any:
         """Infer the first execution device chosen by HF/Accelerate auto placement."""

@@ -1,0 +1,3 @@
+[day8] auto-using local ShieldGemma dir: artifacts/model_store/shieldgemma-2b
+[day8] backend=shieldgemma status=completed
+[day8] backend=granite_guardian status=completed

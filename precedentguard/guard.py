@@ -182,12 +182,26 @@ class PrecedentGuard:
         ]
         return resolve_view(eig, Intervention.ablate(mutable_ids))
 
+    def _query_subgraph_signature(self, eig: EIG) -> str:
+        """Derive the query-side counterpart to precedent subgraph signatures.
+
+        Sorted multiset of mutable-ancestor node types. Callers that need a
+        different structural fingerprint pass it through ``decide()``.
+        """
+        tokens = sorted(
+            node.node_type.value
+            for node in eig.nodes.values()
+            if node.node_type.is_mutable_by_attacker
+        )
+        return " ".join(tokens) if tokens else "empty"
+
     def _retrieve_precedents(
         self,
         eig: EIG,
         target_action_id: str,
         query_summary: Optional[str],
         query_action: Optional[str],
+        query_subgraph_signature: Optional[str] = None,
     ) -> list[RetrievedPrecedent]:
         """Retrieve top-k precedents when a store is configured (§4.3)."""
         if self.precedent_store is None or len(self.precedent_store) == 0:
@@ -203,9 +217,12 @@ class PrecedentGuard:
                 _node_query_text(eig.nodes[target_action_id])
                 if target_action_id in eig.nodes else ""
             )
+        if query_subgraph_signature is None:
+            query_subgraph_signature = self._query_subgraph_signature(eig)
         return self.precedent_store.retrieve(
             query_summary=query_summary,
             query_action=query_action,
+            query_subgraph_signature=query_subgraph_signature,
             top_k=self.precedent_top_k,
             strategy=self.precedent_retrieval_strategy,
         )
@@ -217,6 +234,7 @@ class PrecedentGuard:
         *,
         query_summary: Optional[str] = None,
         query_action: Optional[str] = None,
+        query_subgraph_signature: Optional[str] = None,
     ) -> Decision:
         """Return the runtime decision for the target action given the EIG.
 
@@ -253,7 +271,11 @@ class PrecedentGuard:
         # Stage 2: retrieve precedents (empty when store is None)
         retrieval_started = time.perf_counter()
         retrieved = self._retrieve_precedents(
-            eig, target_action_id, query_summary, query_action
+            eig,
+            target_action_id,
+            query_summary,
+            query_action,
+            query_subgraph_signature,
         )
         timing_ms["retrieval_ms"] = (
             time.perf_counter() - retrieval_started

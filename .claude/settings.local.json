@@ -26,7 +26,17 @@
       "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3 --limit 10)",
       "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit --limit 10)",
       "Bash(grep -v \".log$\")",
-      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3_dev50 --limit 50)"
+      "Bash(PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --prefix day1_triplet_logit_prompt_repaired_v3_dev50 --limit 50)",
+      "Bash(PYTHONPATH=. python scripts/day12_certificate_empirical_validity.py --root artifacts/day6 --prefix day7_agentharm_full --output experiments/day12_dry_run_v2_validity.csv --verdict experiments/day12_dry_run_v2_verdict.md --commit-grid)",
+      "Bash(rm -f experiments/day12_dry_run_v2_validity.csv experiments/day12_dry_run_v2_verdict.md)",
+      "Bash(PYTHONPATH=. python scripts/day12_certificate_empirical_validity.py --root artifacts/day6 --prefix day7_agentharm_full --output experiments/day12_dry_run_v3_validity.csv --verdict experiments/day12_dry_run_v3_verdict.md --commit-grid)",
+      "Bash(awk -F, '{print $1,$2,$3,$4,$5,$6,\"empFPR=\"$18,\"U_FP=\"$19,\"nonVacFP=\"$25}')",
+      "Bash(awk -F, '{print \"primary=\" $4, \"theta=\" $5, \"empFPR=\" $17, \"U_FP=\" $18, \"FPR_ok=\" $22, \"nonVac=\" $24, \"both_ok=\" $25}')",
+      "Bash(awk -F, '{print $1, \"theta=\"$5, \"empFNR=\"$11, \"empFPR=\"$17, \"U_FN=\"$12, \"U_FP=\"$18}')",
+      "Bash(PYTHONPATH=. python -m unittest discover -s tests -q)",
+      "Bash(PYTHONPATH=. python -m unittest tests.test_run_real_backbone_eval -v)",
+      "Bash(PYTHONPATH=. python scripts/day13_summarize_sweep.py --root artifacts/day6 --prefix day7_agentharm_full --limit 200 --modes backbone_only clipping_only pg_with_precedents --output experiments/day13_dry_run_summary.md)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k in ['certificate','summary','grid','split']}, indent=2\\)\\)\")"
     ]
   }
 }

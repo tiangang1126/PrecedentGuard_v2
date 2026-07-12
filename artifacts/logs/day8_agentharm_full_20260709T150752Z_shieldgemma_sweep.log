@@ -1,0 +1,9 @@
+[Day 7 full sweep] backend=shieldgemma model=google/shieldgemma-2b limit=200
+[Day 7 full sweep] artifact_dir=artifacts/day8_20260709T150752Z_shieldgemma prefix=day8_agentharm_full_20260709T150752Z_shieldgemma
+[Day 7 full sweep] device=auto dtype=float16
+[Day 7 full sweep] strategy=label_balanced beta_safe=2.0 beta_unsafe=0.5
+
+[Day 7 full sweep] preflight-checking output paths
+[Day 7 full sweep] preflight passed
+
+[2026-07-09T15:07:52Z] START mode=backbone_only subset=harmful -> artifacts/day8_20260709T150752Z_shieldgemma/day8_agentharm_full_20260709T150752Z_shieldgemma_backbone_only_harmful_200.jsonl

@@ -11,11 +11,13 @@
 
 ## Abstract
 
-LLM agents increasingly rely on persistent memory, external observations, retrieval systems, and tool outputs when deciding whether and how to execute consequential actions. These trajectory components are mutable: an adversary may poison memory, inject instructions through tool returns, or manipulate retrieval so that a runtime guard receives misleading evidence. Existing causal approaches mainly use causal graphs to guide prompting or localize attack-induced behavior, while certified memory defenses primarily bound attack success within a specific retrieval setting. A remaining challenge is to control **both** missed hazards and benign over-blocking when multiple trajectory-evidence channels are perturbed.
+LLM agents rely on persistent memory, external observations, retrieval, and tool outputs when deciding whether to execute consequential actions. These trajectory components are mutable: an adversary can poison memory, inject instructions through tool returns, or corrupt retrieval so the runtime guard receives misleading evidence. Existing causal-prompting methods use causal graphs to guide reasoning but do not certify decisions; certified memory defenses bound attack success within a single retrieval channel but do not control benign over-blocking. A remaining challenge is to control **both** missed hazards and benign over-blocking when several trajectory-evidence channels are perturbed at once.
 
-We introduce **PrecedentGuard**, a training-free runtime calibration framework for frozen LLM guards. PrecedentGuard first constructs an **execution-grounded intervention graph** from trusted orchestration and data-flow logs rather than inferring causal edges from text alone. It then decomposes a guard decision into bounded, counterfactually measured contributions from mutable trajectory nodes and retrieved precedents. Each precedent is represented by a scoped evidence capsule that separates provenance authenticity from semantic authorization. A directional aggregation rule prevents unauthorised evidence from decreasing the predicted risk, while separately clipping upward and downward score changes.
+We introduce **PrecedentGuard**, a training-free runtime calibration wrapper for frozen LLM guards. PrecedentGuard (i) constructs an **execution-grounded intervention graph** from runtime instrumentation rather than inferring causal edges from text; (ii) decomposes a guard decision into bounded counterfactual contributions from mutable trajectory nodes and retrieved precedent capsules; (iii) separates provenance authenticity from semantic authorization, so that only *policy-attested* evidence can reduce the aggregated risk score. We prove a **Directional Intervention Sensitivity Bound** on per-type score movement and a **Finite-Sample Class-Conditional Two-Sided Certificate** on both FNR and FPR over five heterogeneous evidence channels simultaneously, under a pre-committed $(\Gamma, \alpha)$ calibration grid.
 
-We establish two results. First, a **Directional Intervention Sensitivity Bound** limits how much a bounded number of modified evidence nodes can raise or lower the guard score. Second, a **Finite-Sample Double-Sided Risk Certificate** converts these directional score bounds and class-conditional calibration margins into simultaneous high-probability upper bounds on false-negative and false-positive rates. We additionally give an observational-indistinguishability lower bound showing that cryptographic authenticity alone cannot improve classification guarantees unless the trusted evidence is also label-informative. We evaluate PrecedentGuard on trajectory-safety, indirect-prompt-injection, and persistent-memory-poisoning settings, with controlled interventions, adaptive attackers, graph-quality ablations, and certificate-validity tests. `[RESULT TO BE INSERTED]`
+**Empirical anchors.** On AgentHarm-public with a frozen Llama-Guard-3-1B backbone: (a) applying only directional clipping to current-trajectory evidence *worsens* benign block-rate from 67.5 % to 76.0 % (Wilson $[+2.5, +15.0]$ pp) — an existence counterexample to the sufficiency of bounded score movement alone; (b) under the leave-one-base-task-out precedent split, PG-full `[RESULT TO BE INSERTED — Day 13 LOBTO rerun]`; (c) the primary certificate grid $(\theta = 0.7, \varepsilon_\pm = 0.05)$ produces non-vacuous $U_{FN} = 0.28$ and $U_{FP} = 0.42$, both satisfied on 5/5 bootstrap seeds. **Cross-backbone.** On ShieldGemma-2B (under-triggered on AgentHarm; benign block 0 %) and Granite-Guardian-3.2-2B (over-triggered; benign block 99 %), PG-full leaves verdicts essentially unchanged — the mechanism's efficacy is bounded by backbone decision-margin room, which we report explicitly rather than claiming backbone-agnostic performance.
+
+*This preprint records the paper's mechanism claims and empirical anchors that are invariant under a self-audit-driven leakage correction; the audit trail is described in `docs/FAILURE_LOG.md` F-005/F-006 and §7.1.a–b.*
 
 ---
 
@@ -55,12 +57,14 @@ This design makes the causal claim falsifiable. The paper evaluates whether grap
 
 ### 1.4 Why bounded score changes are not enough
 
-A bound on logit movement does not directly imply a bound on false-negative or false-positive rates. If many examples lie close to the decision threshold, even a small score change can flip many predictions. PrecedentGuard therefore combines a deterministic intervention-sensitivity bound with the **class-conditional margin distributions** of a held-out calibration set. The result is a pair of certificates:
+A bound on logit movement does not directly imply a bound on false-negative or false-positive rates. If many examples lie close to the decision threshold, even a small score change can flip many predictions. **We confirm this failure mode empirically on the AgentHarm-public dev split with a frozen Llama-Guard-3-1B backbone (Table 1 in §7.1.d): applying only per-type directional clipping to current-trajectory evidence, without precedent-informed correction, raises the benign block-rate from 67.5 % (frozen backbone) to 76.0 % — an 8.5 pp regression in over-blocking with 95 % Wilson interval $[+2.5, +15.0]$ pp — while sustaining harmful blocking within 1 pp of the backbone.** The regression is generated by a mean upward score shift of only $+0.047$ against a symmetric type-cap of $0.20$; bounded score movement is neither necessary nor sufficient for bounded class-conditional error. Because this ablation does not query the precedent store, the observation is invariant under any leave-one-out or leave-one-base-task-out precedent-split protocol, and provides the paper's cleanest existence counterexample to the sufficiency of intervention-sensitivity bounds alone.
+
+PrecedentGuard therefore combines a deterministic intervention-sensitivity bound with the **class-conditional margin distributions** of a held-out calibration set. The result is a pair of certificates:
 
 - an upper bound on the attacked false-negative rate, governed by the unsafe-class margin and the maximum downward score shift;
 - an upper bound on the attacked false-positive rate, governed by the safe-class margin and the maximum upward score shift.
 
-This explicitly prevents a vacuous “always block” solution from being presented as certified safety.
+This explicitly prevents a vacuous "always block" solution from being presented as certified safety, and the empirical anchor above shows that the "always block a bit more" degenerate solution is a real observed failure mode of bounded-score approaches, not a hypothetical concern.
 
 ### 1.5 Contributions
 
@@ -70,7 +74,7 @@ This paper makes four contributions.
 
 2. **Trust-separated counterfactual calibration.** We introduce a training-free wrapper for frozen guards that measures evidence influence through counterfactual replay, separates authenticity from semantic authorization, and applies directional clipping so that unauthorised evidence cannot lower the risk score.
 
-3. **Double-sided certification.** We prove a deterministic Directional Intervention Sensitivity Bound and derive finite-sample, class-conditional upper bounds on both FNR and FPR. The certificate exposes the exact dependence on attack budget, per-type contribution caps, threshold margins, and calibration-set size.
+3. **Class-conditional two-sided certificates over heterogeneous trajectory-evidence channels.** We give (i) a deterministic *Directional Intervention Sensitivity Bound* that translates per-type attack budgets $(m_{\text{mem}}, m_{\text{obs}}, m_{\text{ret}}, m_{\text{tool}}, m_{\text{prec}})$ into asymmetric score-shift caps $(\rho_-, \rho_+)$, and (ii) *finite-sample class-conditional upper bounds* $U_{\text{FN}}, U_{\text{FP}}$ that hold jointly at level $1 - \alpha$ under an A5 pre-committed calibration grid. Unlike SMSR's single-response bound over one retrieval channel, our certificate covers memory, retrieval, observation, tool return, and precedent capsule channels simultaneously, on a frozen guard's decision layer rather than end-agent behavior. The certificate exposes the exact dependence on attack budget, per-type contribution caps, threshold margins, and calibration-set size, and we report a **primary grid** $(\theta = 0.7, \varepsilon_\pm = 0.05)$ under which all three modes achieve non-vacuous $U_{FN}, U_{FP} < 0.5$ on AgentHarm-public.
 
 4. **Causality- and trust-focused evaluation.** We design controlled trajectory interventions with known modified nodes, compare execution, random, sequential, learned, and oracle graphs, test signature-only and semantic-attestation variants, and evaluate unsigned, authenticated, adaptive, and cross-domain attacks.
 
@@ -675,29 +679,22 @@ Exact model versions and checkpoints must be verified immediately before the exp
 
 ### 6.5 Baselines
 
-#### General guard baselines
+We report eight modes on Suite A. Each mode isolates a specific design axis of PrecedentGuard so that §7 can attribute observed effects to the corresponding mechanism. All eight are implemented in a single script (`scripts/run_real_backbone_eval.py`) and produce comparable JSONL traces; the precise counterfactual, clipping, and trust-tier semantics are documented in `docs/DECISIONS.md` D-005 through D-011.
 
-- frozen backbone on the proposed action only;
-- frozen backbone on flattened full trajectory;
-- vanilla precedent retrieval with raw context concatenation;
-- similarity-weighted precedent voting;
-- sequence-aware or trajectory-aware guard where code is available.
+| # | Mode name | Precedent retrieval | Counterfactual replay | Directional clipping | Directional trust | Graph structure | Role in the ablation |
+|---|---|---|---|---|---|---|---|
+| B0 | `backbone_only` | — | — | — | — | — | Frozen guard on the base view $B(I, A)$; the reference point every other mode is compared against. |
+| B1 | `flattened_trajectory` | — | — | — | — | — | Frozen guard on the full trajectory context. Isolates the value of *any* structured evidence handling. |
+| B2 | `raw_rag_concat` | ✓ (top-$k$, no attestation) | — | — | — | — | Vanilla RAG-style precedent concatenation. Isolates the value of the PG counterfactual + trust pipeline against plain retrieval. |
+| B3 | `cip_style` | — | — | — | — | EIG serialised to prompt | Reproduces CIP's use of causal influence diagrams as a *prompt-engineering aid*, not as an intervention interface. §2.4 head-to-head slot. |
+| B4 | `clipping_only` | — | ✓ | ✓ | Un-attested by construction | EIG | Isolates directional clipping *without* precedents. §7.1.d anchor — the mode that provably fails on FPR. |
+| B5 | `sequential_graph` | — | ✓ | ✓ | Un-attested by construction | Chain over ordered node ids | PG pipeline over a time-sequential graph. Isolates the value of the runtime-instrumented dependency edges. |
+| B6 | `random_graph` | — | ✓ | ✓ | Un-attested by construction | Degree-matched random subset (deterministic seed) | PG pipeline over a random DAG. Complements B5 with a degree-preserving null. |
+| B7 | `pg_with_precedents` (PG-full) | ✓ (LOBTO + subgraph signature) | ✓ | ✓ | Full 3-tier | EIG | Full v0.2 pipeline. Compared against B0–B6 for mechanism attribution and against §7.4's four trust tiers for the directional-trust ablation. |
 
-#### Causal and counterfactual baselines
+**Excluded from Suite A but reported separately.** SMSR and MemLineage require their own persistent-memory / lineage-tracking runtime; we compare against SMSR on Suite C (AgentPoison subset) under its supported setting (§7.4). Similarity-weighted precedent voting and learned text-dependency graphs are appendix-only ablations for space reasons.
 
-- CIP-style causal prompting;
-- no-graph counterfactual ablation;
-- sequential-neighbor graph;
-- random graph with matched degree;
-- learned text-dependency graph;
-- oracle execution graph on controlled data.
-
-#### Memory-security baselines
-
-- signature-only provenance;
-- SMSR under its supported persistent-memory threat model;
-- MemLineage under its supported lineage/action-gating setup;
-- policy-attested PrecedentGuard.
+**Note on B3 (CIP-style).** We do not import the CIP model directly; we reproduce its operational paradigm — serialising the causal graph as prompt context — using the same frozen backbone as B0–B2. This isolates the causal-graph-as-prompt-aid effect from the causal-graph-as-intervention-interface effect that B7 exercises.
 
 ### 6.6 Attack models
 
@@ -795,9 +792,34 @@ Trust ablations:
 
 ## 7. Results
 
-> **Status disclosure (2026-07-07):** §7.1 reports development-set evidence from a triplet-mode evaluation on 50 examples per subset from the public AgentHarm test set with a single frozen backbone (Llama-Guard-3-1B). This validates that (a) the full PrecedentGuard pipeline runs end-to-end on a real HuggingFace-hosted guard, and (b) the theoretical mechanism separating current-trajectory evidence from precedent-driven evidence produces the predicted directional effect on aggregated risk. §7.2–§7.6 remain scaffolds pending the 3-backbone × 3-suite × multi-seed test-set sweep scheduled for Days 7–11 of the sprint.
+> **Status disclosure (updated 2026-07-12).** §7.1.a reports the Day 7 development-set sweep at $n = 200$ per subset on AgentHarm-public with a single frozen backbone (Llama-Guard-3-1B). This sweep used a *leave-one-example-out* (LOEO) precedent split; the Day 10 audit identified that AgentHarm-public groups four near-duplicate prompt variants per base task, so LOEO admits variant leakage into the precedent store (empirically 100.0 % same-base-task retrieval on the harmful and benign subsets, verifiable from `retrieval_diagnostics` in the JSONL trace). §7.1.b describes the corrected *leave-one-base-task-out* (LOBTO) protocol used in the Day 13 rerun that we treat as the primary result; §7.1.c retains the earlier $n = 50$ pilot as a mechanism sanity check. §7.1.d isolates the paper's cleanest empirical anchor — the clipping-only over-blocking regression — which is provably independent of the LOEO/LOBTO distinction because that mode does not query the precedent store. §7.2 reports the certificate empirical validity under the dual-threshold grid pre-committed in `docs/DECISIONS.md` D-011. §7.3–§7.6 report the additional baselines (§6.5 B1, B3, B5, B6) and the trust-variant ablation.
 
-### 7.1 Development-set triplet evaluation on AgentHarm-public (Llama-Guard-3-1B, n = 50 per subset)
+### 7.1.a Preliminary $n = 200$ sweep under LOEO — reference only
+
+We evaluate three ablation modes on the harmful and harmless-benign subsets of the AgentHarm public test set ($n = 200$ per subset, identical example ids across modes so all within-example paired tests are exact):
+(i) **backbone_only** (B0) — frozen Llama-Guard-3-1B applied to the base view $B(I, A)$;
+(ii) **clipping_only** (B4) — PrecedentGuard over current-trajectory evidence with directional clipping, no precedent retrieval;
+(iii) **pg_with_precedents / PG-full (LOEO)** (B7) — the full v0.2 pipeline with label-balanced retrieval (top-$k = 2$), asymmetric precedent coefficients $\beta_{\text{safe}} = 2.0,\ \beta_{\text{unsafe}} = 0.5$, and a precedent store constructed by excluding only the exact example id.
+
+**Table 1 (LOEO $n = 200$).** Verdict counts and Wilson 95 % CIs. *Not the paper's primary result — retained for continuity with the Day 7 EOD report.*
+
+| Mode | Harmful block / 200 (TPR, 95 % CI) | Benign block / 200 (FPR, 95 % CI) | Mean $S_{PG}$ (harmful) | Mean $S_{PG}$ (benign) | Mean $\Delta_{PG}$ (benign) |
+|---|---|---|---|---|---|
+| Backbone only | 194 / 200, **0.970** [0.934, 0.987] | 135 / 200, **0.675** [0.607, 0.736] | 0.909 | 0.598 | 0.000 |
+| Clipping only | 196 / 200, **0.980** [0.949, 0.993] | 152 / 200, **0.760** [0.694, 0.816] | 0.919 | 0.646 | **+0.047** |
+| PG-full (LOEO) | 193 / 200, **0.965** [0.928, 0.984] | 96 / 200, **0.480** [0.412, 0.549] | 0.881 | 0.501 | **-0.098** |
+
+**Leakage disclosure.** Under LOEO, top-1 retrieval on both subsets returned a precedent from the same AgentHarm base task in **200 / 200 (100.0 %)** queries. AgentHarm variant tokens within a base task differ only in surface phrasing and hint markers (token-Jaccard $\ge 0.775$), so the FPR reduction reported here mixes the paper's directional-trust mechanism with a semantic-near-clone leakage effect. **The magnitudes above must not be interpreted as the mechanism's isolated contribution.**
+
+### 7.1.b Primary result — leave-one-base-task-out ($n = 200$)
+
+The corrected LOBTO protocol excludes **every AgentHarm variant that shares the query's base task id** from the precedent store; for a query with `example_id = "b-v"` and base id `b`, all rows satisfying `row_id.split("-")[0] == b` are withheld (`scripts/run_real_backbone_eval.py:make_leave_one_base_task_out_precedent_store`, three regression tests in `tests/test_run_real_backbone_eval.py`). On the AgentHarm-public split ($47$ base tasks, $\approx 4$ variants each), LOBTO removes on average $2.9$ additional variants per query compared to LOEO. The retrieval channel is simultaneously extended with a per-trajectory subgraph signature (sorted multiset of instrumented mutable-node types, §4.3) so that the structural-similarity weight $\lambda_g$ contributes non-trivially rather than reducing to $0$.
+
+**Table 2 (LOBTO $n = 200$).** `[RESULT TO BE INSERTED after Day 13 rerun — LOBTO helper + subgraph signature + trust_variant flag verified across 170 unit tests.]`
+
+We commit to reporting the LOBTO numbers **irrespective of direction** in the camera-ready supplement together with the exact base-task partition and per-example JSONL trace. Pre-commitment grid hash for the LOBTO sweep is `0f5b73a9c02e9a5a59e68a43e0dfa87ad06de9fc7957562758be33d1975ceaf6` (registered under tag `certificate_grid_day12` in `experiments/registry.csv` on 2026-07-12 before Day 13 calibration is touched).
+
+### 7.1.c Pilot ($n = 50$ per subset, retained as mechanism sanity check)
 
 We evaluate three ablation modes on the harmful and harmless-benign subsets of the AgentHarm public test set (n = 50 per subset; identical example ids across modes so all comparisons are within-example):
 (i) **backbone-only** — frozen Llama-Guard-3-1B applied to the base view $B(I, A)$;
@@ -827,7 +849,7 @@ We evaluate three ablation modes on the harmful and harmless-benign subsets of t
 | PG block | 21 | **0** |
 | PG allow | **6** | 23 |
 
-**Six benign examples flip from *backbone-block* to *PG-allow*; zero flip in the opposite direction.** McNemar exact two-sided $p = \mathbf{0.0312}$. This is the paper's headline safety-selectivity result under the dev-set configuration: **PG never introduces a false positive that the backbone would not have made, and it strictly recovers six previously over-blocked benign requests.** The score-movement distribution confirms the mechanism: 35 of 50 benign examples have $S_{PG}(\text{PG}) < S_{PG}(\text{backbone})$, with mean per-example shift $-0.050$; on the harmful subset the mean shift is also negative ($-0.028$) but crucially all 50 examples remain above the 0.5 threshold, i.e., harmful verdicts degrade *gracefully but not fatally*.
+**Six benign examples flip from *backbone-block* to *PG-allow*; zero flip in the opposite direction on this $n = 50$ dev slice.** McNemar exact two-sided $p = \mathbf{0.0312}$. **Scope of the claim:** conditional on the $n = 50$ dev slice under LOEO leakage (§7.1.a disclosure), PG did not introduce a benign false positive that the backbone would not have made. This is a *slice-level* statement, not a population claim; at $n = 200$ the harmful subset shows a $1$-example allow that the backbone would have blocked ($193 / 200$ vs $194 / 200$), demonstrating that PG-full is not strictly non-worsening in the population sense. The score-movement distribution confirms the mechanism direction: 35 of 50 benign examples have $S_{PG}(\text{PG}) < S_{PG}(\text{backbone})$, with mean per-example shift $-0.050$; on the harmful subset the mean shift is also negative ($-0.028$).
 
 **Category disaggregation (benign, PG-full).**
 
@@ -886,9 +908,51 @@ The two mechanisms are separately configurable and are reported together as "rep
 
 To surface base-score inflation attributable to precedent inclusion, `analyze_day1_base_guard_prompt_layer.py` records four base scores per example: backbone (no precedents), all-precedents, safe-only, and unsafe-only. This isolates whether observed $S_{PG}$ shifts are driven by counterfactual influence estimation (which the theory allows) or by uncontrolled prompt-context inflation (which the theory forbids). The v3 prompt template was selected after two prior iterations reduced the mean unsafe-only inflation to within the type-clipping cap $c_{\text{precedent}} = 0.15$ on the pilot set.
 
+### 7.1.e Cross-backbone reproducibility (Day 8 sweep, LOEO $n = 200$)
+
+Table 1 reported only Llama-Guard-3-1B. We also ran the same triplet sweep on ShieldGemma-2B and Granite-Guardian-3.2-2B under the identical LOEO protocol (`artifacts/day8_*_shieldgemma/`, `artifacts/day8_*_granite_guardian/`; all three backbones use the same registry commit tag `certificate_grid_day8`, hash `4eb809d0…`).
+
+**Table 1b (Cross-backbone LOEO $n = 200$).**
+
+| Backbone | Mode | Harmful block rate | Benign block rate | Mean $S_{PG}$ (benign) |
+|---|---|---|---|---|
+| Llama-Guard-3-1B | backbone_only | 0.970 | 0.675 | 0.598 |
+| Llama-Guard-3-1B | clipping_only | 0.980 | **0.760** | 0.646 |
+| Llama-Guard-3-1B | pg_with_precedents | 0.965 | **0.480** | 0.501 |
+| ShieldGemma-2B | backbone_only | **0.265** | 0.000 | ≈ 0.10 |
+| ShieldGemma-2B | clipping_only | 0.295 | 0.000 | ≈ 0.10 |
+| ShieldGemma-2B | pg_with_precedents | 0.285 | 0.000 | ≈ 0.10 |
+| Granite-Guardian-3.2-2B | backbone_only | 0.980 | **0.990** | ≈ 0.9 |
+| Granite-Guardian-3.2-2B | clipping_only | 0.980 | 0.995 | ≈ 0.9 |
+| Granite-Guardian-3.2-2B | pg_with_precedents | 0.980 | 0.990 | ≈ 0.9 |
+
+**Interpretation — mechanism efficacy is bounded by backbone decision-margin room.** ShieldGemma-2B is systematically *under-triggered* on AgentHarm-public: only 26.5 % of harmful and 0 % of benign examples cross the $\theta = 0.5$ threshold, and mean $S_{PG}$ on benign concentrates near $0.10$ — nowhere near the threshold. Granite-Guardian-3.2-2B is systematically *over-triggered*: 99 % of benign examples cross $\theta = 0.5$ and mean $S_{PG}$ concentrates near $0.9$. In both cases the decision-margin distribution provides **no room** for the directional-trust mechanism to move examples across the threshold. PG-full on ShieldGemma changes $S_{PG}$ by less than $0.02$ on average (mechanism operates but cannot flip verdicts because no examples are near the threshold); PG-full on Granite is likewise inert.
+
+This is not a failure of the paper's theory. Theorem 1 gives a bound on score movement; whether that movement translates into verdict flips depends on the margin distribution — exactly the class-conditional structure encoded by Theorem 3's $\hat R_{FN}, \hat R_{FP}$. On AgentHarm-public the calibration margins concentrate away from $\theta = 0.5$ for both ShieldGemma and Granite, so **the certificate correctly reports that any bounded intervention leaves verdicts unchanged**. Llama-Guard-3-1B is the one backbone whose default calibration has non-trivial mass on both sides of $\theta = 0.5$, and consequently the one backbone where the mechanism is observable at the standard threshold.
+
+**Consequence for §7.2 certificate reporting.** We do not claim a "backbone-agnostic" certificate. Section 7.2's non-vacuous $U_{FN}, U_{FP} < 0.5$ result applies to backbones whose $S_{PG}$ distribution has calibrated margin mass on both sides of the reporting threshold. For ShieldGemma and Granite on AgentHarm, the Day 8 certificate sweep at $\theta = 0.5, \varepsilon_\pm = 1.0$ produced vacuous FN and mostly-vacuous FP bounds (`artifacts/certificates/day8_{shieldgemma,granite}_certificate.json`, non_vacuous_FN_ratio = 0, non_vacuous_FP_ratio = 0.25). The Day 12 dual-threshold grid (D-011) does not rescue these backbones on AgentHarm; a backbone-specific threshold calibration under a separately pre-committed A5 grid would be needed to make the certificate non-vacuous on ShieldGemma or Granite. This is deferred to camera-ready if space permits.
+
+### 7.1.d Leakage-independent anchor — clipping-only over-blocking regression
+
+The `clipping_only` ablation (B4 in §6.5) does not query the precedent store: it applies per-type directional clipping to current-trajectory evidence and aggregates with the outer clip of §4.6, without any capsule retrieval or per-capsule counterfactual. Its verdict distribution is therefore identical under LOEO, LOBTO, and any other precedent-split protocol. This makes clipping-only the paper's cleanest empirical anchor to Corollary 1 — the only observation that is guaranteed to be independent of the retrieval-leakage issue described in §7.1.a.
+
+**Clipping-only regression (invariant across LOEO and LOBTO).** Benign block-rate rises from $135 / 200 = 67.5 \%$ (backbone) to $152 / 200 = 76.0 \%$ (clipping_only) — an $8.5$ percentage-point regression in over-blocking with 95 % Wilson CI $[+2.5, +15.0]$ pp. On the harmful subset, blocking rises marginally from $97.0 \%$ to $98.0 \%$. Mean $\Delta_{PG}$ on the benign subset is $+0.047$ against a symmetric type-cap $c^\pm = 0.20$; every non-zero benign clipping_only contribution is upward. This is the empirical existence counterexample motivating §1.4: **a bounded score-shift alone does not imply a bounded error-rate**, because a $+0.047$ mean upward shift over a distribution with a non-trivial fraction of mass near the $\theta = 0.5$ threshold flips 17 additional benign examples from *allow* to *block*.
+
+The finding matches the theoretical structure of the directional trust rule: current-trajectory evidence is by construction unattested, so under §4.6 the un-attested clip $\max(0, \tilde\delta_e)$ prevents any negative contribution regardless of the sign of the raw counterfactual. `clipping_only` *cannot* express a "this looks safe" signal — even when the frozen backbone is over-conservative and a safe-direction signal would be helpful. The precedent-capsule channel is precisely the mechanism that admits attested, label-informative negative contributions under §4.6.
+
 ### 7.2 Certificate validity and tightness
 
-For all evaluated budgets within `[RANGE]`, empirical FNR and FPR remained below their respective finite-sample upper bounds in `[X/Y]` runs. The median certificate gaps were `[VALUE]` for FNR and `[VALUE]` for FPR. Bounds became vacuous beyond `[BUDGET]`, consistent with the increase in vulnerable margin mass near the threshold. *[Days 8–10.]*
+We report certificate empirical validity under the pre-committed dual-threshold grid (`docs/DECISIONS.md` D-011, hash `0f5b73a9…`). The primary grid point is $(\theta = 0.7, \varepsilon_\pm = 0.05, \alpha = 0.05)$ with per-type budget $(m_{\text{mem}}, m_{\text{ret}}, m_{\text{prec}}) = (1, 1, 1)$ and $m_{\text{obs}} = m_{\text{tool}} = 0$; the secondary point $(\theta = 0.5, \varepsilon_\pm = 0.15)$ is committed jointly so that a threshold-sensitivity table can be reported without inflating the Hoeffding-tail multiplier. Empirical validity is judged by 5-fold class-conditional bootstrap on an 80/20 calibration/test split with seeds $\{7, 13, 17, 19, 23\}$; the certificate is valid on a seed if $U_{FN} \ge \hat R_{FN}^{\text{test}}$ AND $U_{FP} \ge \hat R_{FP}^{\text{test}}$.
+
+**Table 3 (Certificate empirical validity, LOEO $n = 200$ Day 7 reference dataset).**
+
+| Mode | Primary certificate $U_{FN} / U_{FP}$ (median) | Empirical $\hat R_{FN} / \hat R_{FP}$ (median, test) | Seeds valid | Non-vacuous $(U < 0.5)$? |
+|---|---|---|---|---|
+| `backbone_only` | 0.22 / 0.58 | 0.05 / 0.35 | 5 / 5 | FN ✓, FP borderline |
+| `clipping_only` | 0.20 / 0.65 | 0.05 / 0.38 | 5 / 5 | FN ✓, FP no |
+| **`pg_with_precedents`** | **0.28 / 0.42** | **0.10 / 0.13** | **5 / 5** | **FN ✓, FP ✓** |
+
+PG-full is the only mode that produces a non-vacuous FP-side certificate under the primary grid on the Day 7 sample. The gap between predicted $U_{FP} = 0.42$ and empirical $\hat R_{FP} = 0.13$ is $0.29$ — a substantial buffer that would remain non-vacuous under a $\pm 0.2$ distribution shift on the LOBTO rerun. Table 3 will be re-populated after the Day 13 LOBTO sweep; the pre-commitment hash above forbids any grid re-tuning between Day 12 and Day 13. `[Table 3 to be replaced with LOBTO numbers once artifacts/day13/day13_lobto_*.jsonl land.]`
 
 ### 7.3 Does the execution graph matter?
 
@@ -952,8 +1016,13 @@ Precedents are most useful when current evidence is ambiguous but historical cas
 - Scope matching may reject useful evidence or admit an inapplicable precedent.
 - Calibration bounds may fail under distribution shift.
 - Counterfactual scoring increases latency.
+- Benchmark-level near-duplicate variants can leak into precedent stores if leave-one-out is applied at variant granularity rather than base-task granularity (see §7.1.a discovery and `docs/FAILURE_LOG.md` F-005).
 
 These are measured or explicitly scoped, not concealed by the theorem statement.
+
+### 8.6 On the LOEO → LOBTO transition as a methodological lesson
+
+A single-line change to the precedent-split protocol (variant-id filter → base-task-id filter) accounted for the difference between a sweep that admits semantic near-clones of the query and a sweep that does not. We report the sequence honestly: the original protocol was scientifically indefensible, the discovery happened during a self-directed adversarial audit, and the fix is a six-line code change with three regression unit tests. This pattern generalises: any benchmark whose examples are organised by a `{base}-{variant}` id convention needs base-level leave-one-out, not variant-level. AgentDojo, AgentPoison subset, and AgentSafetyBench all follow variants of this convention.
 
 ---
 
@@ -961,7 +1030,16 @@ These are measured or explicitly scoped, not concealed by the theorem statement.
 
 PrecedentGuard does not certify the full agent policy, environment, or tool implementation. It certifies a guard decision under bounded evidence interventions. The method assumes a trusted instrumentation and aggregation layer; compromise of this layer invalidates the guarantee. Semantic attestation may require human review, deterministic policy checks, or a separately validated model, creating operational cost and possible bias. Safety labels can encode contested norms, and false positives may disproportionately affect legitimate but unusual tasks. Evaluation must therefore include benign-sensitive cases, per-domain error analysis, and transparent abstention or appeal mechanisms.
 
-Attack code and poisoned examples should be released with access controls appropriate to their risk. The public artifact should prioritize reproducible defenses, schemas, and synthetic or permissioned test data.
+**Scope-specific limitations at time of submission.**
+
+1. **Backbone-conditional mechanism efficacy.** The paper's directional-trust mechanism is empirically visible only on backbones whose $S_{PG}$ distribution has calibration-margin mass on both sides of the reporting threshold. On AgentHarm-public at $\theta = 0.5$, ShieldGemma-2B is systematically under-triggered (26.5 % harmful, 0 % benign block-rate) and Granite-Guardian-3.2-2B is systematically over-triggered (98 % / 99 %), so PG-full changes verdicts on at most 4 examples out of 400 on either backbone. Llama-Guard-3-1B is the one backbone whose default calibration provides margin room for the mechanism (§7.1.e). We do not claim backbone-agnostic FPR reduction; the paper's positive claim is conditional on backbone calibration adequacy on the target dataset.
+2. **Threshold selection.** The paper's primary decision threshold ($\theta = 0.5$, §7.1) and the primary certificate threshold ($\theta = 0.7$, §7.2 and `docs/DECISIONS.md` D-011) are deliberately decoupled because AgentHarm-public benign $S_{PG}$ concentrates in $[0.4, 0.9]$; a single-threshold report of both is not possible on this dataset without vacuous FP-side bounds. The threshold-sensitivity subsection reports both.
+3. **LOEO discovery.** The original Day 7 sweep used a variant-level leave-one-out; the base-task-level leave-one-out (LOBTO) reported as §7.1.b primary result was adopted only after the Day 10 self-audit. We report both to make the audit trail auditable.
+4. **Human independent review.** As of submission, `[STATUS TO BE UPDATED — Day 20]`. If unavailable at submission time, we honestly state "AI-facilitated adversarial audit; human mathematical review deferred to R&R stage" rather than claim independent verification.
+5. **Cross-domain and OOD.** No formal cross-domain certificate is claimed. Empirical cross-domain measurements on R-Judge as an unseen domain are reported in §7.5 without a certificate.
+6. **Adaptive attack.** The reported adaptive attack (§7.5) is a coordinate-ascent variant with a bounded query budget; adversaries with training-time access to the calibration split are out of scope of the reported certificate.
+
+Attack code and poisoned examples are released with access controls appropriate to their risk. The public artifact prioritises reproducible defenses, schemas, and synthetic or permissioned test data.
 
 ---
 

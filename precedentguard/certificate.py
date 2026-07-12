@@ -279,6 +279,7 @@ def certify(
     one_sided: bool = True,
     enforce_A5: bool = True,
     registry_path: str = REGISTRY_PATH_DEFAULT,
+    registry_tag: str = "certificate_grid",
     alpha_grid: Optional[list[float]] = None,
 ) -> Certificate:
     """Compute the Theorem 3 certificate for a single grid point.
@@ -300,6 +301,9 @@ def certify(
         If True, `assert_grid_committed` is called before computing R_hat.
     registry_path : str
         Path to the experiment registry for A5 verification.
+    registry_tag : str
+        Registry tag used for A5 verification. Must match the tag passed to
+        `commit_grid_hash()` for the same (Gamma, alpha_grid) pre-commitment.
     alpha_grid : Optional[list[float]]
         When provided, enforces the A5-extended pre-commitment: the caller's
         chosen `alpha` MUST be in `alpha_grid`, and the (Gamma, alpha_grid)
@@ -322,8 +326,12 @@ def certify(
         )
 
     if enforce_A5:
-        assert_grid_committed(grid, registry_path=registry_path,
-                              alpha_grid=alpha_grid)
+        assert_grid_committed(
+            grid,
+            registry_path=registry_path,
+            tag=registry_tag,
+            alpha_grid=alpha_grid,
+        )
 
     # Compute rho_+, rho_-
     rho_plus, rho_minus = compute_rho(

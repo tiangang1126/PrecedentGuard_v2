@@ -15,7 +15,7 @@ from precedentguard.eig import EIG
 from precedentguard.types import NodeType
 
 
-GRANITE_DEFAULT = "ibm-granite/granite-guardian-3.2-2b"
+GRANITE_DEFAULT = "ibm-granite/granite-guardian-3.2-5b"
 GRANITE_LARGE = "ibm-granite/granite-guardian-3.2-5b"
 
 

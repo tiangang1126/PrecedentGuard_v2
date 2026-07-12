@@ -9,14 +9,6 @@
       "createdByPid": 13848
     },
     {
-      "id": "9485f433",
-      "cron": "48 17 11 7 *",
-      "prompt": "[AUTO CHECK-IN: 🚨 GATE β — Certificate Validity] 今天是 2026-07-11 17:48，Sprint Week 2 末，BLOCKING gate。请向用户提问以下3个 PASS 标准：\n\n1. Certificate validity 是否在 dev set 上成立？（empirical FNR/FPR ≤ 预测 bound，至少 4/5 seeds 通过）\n2. 所有 8 个 baseline 是否产出数字？\n3. 4 个 trust variant（no provenance / signature only / +lineage / full policy attestation）对比数字是否就绪？\n\n**判决规则**：\n- Certificate VALID + baselines complete → Gate β PASS → 进入 Week 3 (3 个 benchmark suite)\n- Certificate INVALID → 立即建议 STOP sprint → 撤退到 NeurIPS 2027\n\n撤退损失：12 天工作量。**不要硬撑**——certificate 无效投出去是 desk reject。",
-      "createdAt": 1782832788201,
-      "createdBySessionId": "10c0ea8b-e5fc-4107-b719-be3e79abbb06",
-      "createdByPid": 13848
-    },
-    {
       "id": "7e4bb11b",
       "cron": "13 18 15 7 *",
       "prompt": "[AUTO CHECK-IN: Week 3 Mid Pulse] 今天是 2026-07-15 18:13，Sprint Week 3 中段。轻量 check-in，非 gate。请向用户提问：\n\n1. Suite A (AgentHarm + R-Judge) — 跑完了吗？\n2. Suite B (AgentDojo + InjecAgent) — 跑完了吗？\n3. Suite C (AgentPoison + MINJA) — 跑完了吗？\n4. 是否需要砍 Suite C 部分内容来集中精力做 adaptive attack？\n\n如果 2+ suite 仍未完成，立即建议 triage：保 Suite A + B，砍 Suite C 至单一攻击。这是 Gate γ (July 18) 前的早期预警。",

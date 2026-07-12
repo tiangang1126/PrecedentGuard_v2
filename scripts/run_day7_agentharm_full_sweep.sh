@@ -54,6 +54,36 @@ echo "[Day 7 full sweep] device=$PG_BACKEND_DEVICE dtype=$PG_BACKEND_DTYPE"
 echo "[Day 7 full sweep] strategy=$RETRIEVAL_STRATEGY beta_safe=$PRECEDENT_SAFE_BETA_SCALE beta_unsafe=$PRECEDENT_UNSAFE_BETA_SCALE"
 echo
 
+probe_outfile() {
+  local outfile="$1"
+  python - "$outfile" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True, exist_ok=True)
+try:
+    with path.open("a", encoding="utf-8"):
+        pass
+except OSError as exc:
+    raise SystemExit(
+        "Preflight failed for output path: "
+        f"{path}. "
+        "This usually means a stale/corrupted entry exists on the mounted filesystem. "
+        "Use a fresh PREFIX or ARTIFACT_DIR, or delete the broken path from the host OS."
+    ) from exc
+PY
+}
+
+echo "[Day 7 full sweep] preflight-checking output paths"
+for mode in backbone_only clipping_only pg_with_precedents; do
+  for subset in harmful harmless_benign; do
+    probe_outfile "$ARTIFACT_DIR/${PREFIX}_${mode}_${subset}_${LIMIT}.jsonl"
+  done
+done
+echo "[Day 7 full sweep] preflight passed"
+echo
+
 run_mode() {
   local mode="$1"
   local subset="$2"
@@ -86,3 +116,5 @@ echo
 echo "[Day 7 full sweep] all 6 runs complete"
 echo "Summarize with:"
 echo "  PYTHONPATH=. python scripts/summarize_day1_triplet_eval.py --root $ARTIFACT_DIR --prefix $PREFIX --limit $LIMIT"
+echo "Judge Gate beta with:"
+echo "  PYTHONPATH=. python scripts/judge_day7_gate_beta.py --root $ARTIFACT_DIR --prefix $PREFIX --limit $LIMIT"

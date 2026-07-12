@@ -246,20 +246,75 @@ def load_all_agentharm_rows(file_path: Path) -> list[dict]:
     return rows
 
 
-def make_precedent_store(rows: Iterable[dict], *, scope: str) -> SimplePrecedentStore:
+def base_task_id(example_id: str) -> str:
+    """AgentHarm ``{base}-{variant}`` id -> base task id.
+
+    Used by ``make_leave_one_base_task_out_precedent_store`` to strip near
+    duplicate variants of the same base task from the precedent store.
+    """
+    if not example_id:
+        return ""
+    return example_id.split("-", 1)[0]
+
+
+def _trajectory_subgraph_signature(trajectory: list[dict[str, Any]]) -> str:
+    """Canonical per-trajectory node-type multiset signature (paper §4.3 G_i)."""
+    if not trajectory:
+        return "empty"
+    tokens = sorted(
+        infer_trajectory_node_type(event).value for event in trajectory
+    )
+    return " ".join(tokens)
+
+
+def _apply_trust_variant(base_trust: Provenance, variant: str) -> Provenance:
+    """Materialise the four precedent trust tiers used by the §7.4 ablation."""
+    if variant == "no_provenance":
+        return Provenance()
+    if variant == "signature_only":
+        return Provenance(
+            origin_id=base_trust.origin_id,
+            signature_valid=True,
+            semantic_authorization=False,
+            scope=base_trust.scope,
+            policy_version=base_trust.policy_version,
+        )
+    if variant == "lineage":
+        return Provenance(
+            origin_id=base_trust.origin_id,
+            signature_valid=True,
+            semantic_authorization=False,
+            scope=f"lineage:{base_trust.origin_id}",
+            policy_version=base_trust.policy_version,
+        )
+    if variant == "policy_attested":
+        return base_trust
+    raise ValueError(f"unsupported trust variant: {variant}")
+
+
+def make_precedent_store(
+    rows: Iterable[dict],
+    *,
+    scope: str,
+    trust_variant: str = "policy_attested",
+) -> SimplePrecedentStore:
     store = SimplePrecedentStore()
     for row in rows:
         is_safe = row.get("subset") != "harmful"
-        trust = Provenance(
+        base_trust = Provenance(
             origin_id="audit-validator",
             signature_valid=True,
             semantic_authorization=True,
             scope=scope,
             policy_version="v1",
         )
+        trust = _apply_trust_variant(base_trust, trust_variant)
         retrieval_summary, retrieval_action = build_retrieval_texts(
             row["prompt"],
             row.get("trajectory", []),
+        )
+        subgraph_signature = _trajectory_subgraph_signature(
+            row.get("trajectory", [])
         )
         store.add(
             PrecedentCapsule(
@@ -269,20 +324,37 @@ def make_precedent_store(rows: Iterable[dict], *, scope: str) -> SimplePrecedent
                 audited_label=0 if is_safe else 1,
                 justification=row.get("name", ""),
                 trust=trust,
+                subgraph_signature=subgraph_signature,
             )
         )
     return store
 
 
-def make_leave_one_out_precedent_store(
+def make_leave_one_base_task_out_precedent_store(
     rows: Iterable[dict],
     *,
     scope: str,
     held_out_example_id: str,
+    trust_variant: str = "policy_attested",
 ) -> SimplePrecedentStore:
+    """Day 10 audit BLOCKER-1 fix: exclude all AgentHarm variants sharing the
+    held-out base task id, not merely the exact variant id.
+    """
+    held_base = base_task_id(held_out_example_id)
     return make_precedent_store(
-        [row for row in rows if row["id"] != held_out_example_id],
+        [row for row in rows if base_task_id(row["id"]) != held_base],
         scope=scope,
+        trust_variant=trust_variant,
+    )
+
+
+def make_leave_one_out_precedent_store(*args: Any, **kwargs: Any) -> SimplePrecedentStore:
+    """Deprecated. See Day 10 audit BLOCKER-1."""
+    raise RuntimeError(
+        "make_leave_one_out_precedent_store is deprecated and unsafe: it "
+        "leaks near-duplicate variants of the same AgentHarm base task into "
+        "the precedent store (Day 10 audit BLOCKER-1). Use "
+        "make_leave_one_base_task_out_precedent_store instead."
     )
 
 
@@ -447,6 +519,11 @@ def make_query_texts(prompt: str, trajectory: list[dict[str, Any]]) -> tuple[str
     return build_retrieval_texts(prompt, trajectory)
 
 
+def make_query_subgraph_signature(trajectory: list[dict[str, Any]]) -> str:
+    """Companion to ``_trajectory_subgraph_signature`` for the retrieval query."""
+    return _trajectory_subgraph_signature(trajectory)
+
+
 def make_backend(name: str, model_id: str):
     device = os.environ.get("PG_BACKEND_DEVICE", "auto")
     dtype = os.environ.get("PG_BACKEND_DTYPE", "float16")
@@ -505,12 +582,162 @@ def no_counterfactual_score(guard: PrecedentGuard, eig, action_id: str) -> tuple
     return score, capsules
 
 
+# ----------------------------------------------------------------------
+# Additional baselines (paper §6.5).
+#
+# Each baseline realises one specific ablation of the PrecedentGuard pipeline
+# so that §7.3 (does the execution graph matter?) can compare against
+# well-defined design points rather than a single monolithic "vanilla" alt.
+# ----------------------------------------------------------------------
+
+
+def flattened_trajectory_score(guard, eig, action_id: str):
+    """Baseline B1: guard sees the entire trajectory as a flat context.
+
+    The frozen backbone receives the full EIG view without any evidence
+    parent selection, counterfactual replay, or directional clipping. This is
+    the strongest "just give the model everything" baseline that trajectory-
+    aware guards implicitly compare against.
+    """
+    full_view = resolve_view(eig, Intervention.empty())
+    score = float(guard.base_guard(eig, action_id, full_view, precedents=[]))
+    return score, []
+
+
+def raw_rag_concat_score(guard, eig, action_id: str):
+    """Baseline B2: precedents concatenated as raw RAG, no counterfactual.
+
+    Retrieves the same top-k precedents that PG-full would, but delivers them
+    to the backbone as extra prompt context rather than as counterfactually
+    scored, per-type-clipped, directionally-trusted evidence. This isolates
+    the value of the PG counterfactual + trust pipeline against a plain RAG
+    style precedent injection.
+    """
+    retrieved = guard._retrieve_precedents(eig, action_id, None, None)
+    capsules = [r.capsule for r in retrieved]
+    full_view = resolve_view(eig, Intervention.empty())
+    score = float(
+        guard.base_guard(eig, action_id, full_view, precedents=capsules)
+    )
+    return score, capsules
+
+
+def cip_style_score(guard, eig, action_id: str):
+    """Baseline B3: CIP-inspired prompt-side causal-graph serialisation.
+
+    Serialises the EIG parent chain into a textual "node -> node" cue that
+    the backbone consumes alongside the flat context. This mirrors CIP's
+    use of causal influence diagrams as a *prompt-engineering aid* rather
+    than as an intervention interface, and lets §2.4 report a head-to-head
+    number without importing CIP's exact model.
+    """
+    from precedentguard.counterfactual import EffectiveNode  # local, avoid cycle
+    parent_ids = tuple(sorted(eig.mutable_ancestors_of(action_id)))
+    cue = " -> ".join(parent_ids) if parent_ids else "no-parents"
+    full_view = resolve_view(eig, Intervention.empty())
+    # Inject the cue by shadowing the action node's payload with a payload
+    # that carries the CIP causal cue text; the underlying Node itself is
+    # reused so provenance and node_type stay authentic.
+    action_node = eig.nodes[action_id]
+    cue_node = EffectiveNode(
+        node_id=f"{action_id}-cip-cue",
+        is_present=True,
+        node=action_node,
+        content_hash=f"cip-cue-{cue}",
+        payload=f"CIP causal cue: {cue}",
+    )
+    augmented_view = dict(full_view)
+    augmented_view[cue_node.node_id] = cue_node
+    score = float(
+        guard.base_guard(eig, action_id, augmented_view, precedents=[])
+    )
+    return score, []
+
+
+def sequential_graph_score(guard, eig, action_id: str):
+    """Baseline B4: chain-graph replacement for the EIG.
+
+    Rebuilds the mutable-ancestor set assuming each node depends only on the
+    immediately preceding one (a temporal chain). This isolates the value of
+    the runtime-instrumented dependency edges against a naive time-ordered
+    view. Structurally identical to PG-full except the ``mutable_ancestors``
+    call is replaced by a chain over the same node id ordering.
+    """
+    # We reuse the same aggregation path by monkey-patching mutable_ancestors_of
+    # for one call, then restoring. This keeps the aggregation identical while
+    # varying only the parent-set structure.
+    original = eig.mutable_ancestors_of
+    ordered_ids = sorted(original(action_id))
+
+    def chain_ancestors(_action_id: str) -> list[str]:
+        # Chain = keep only the last mutable ancestor as a proxy for
+        # "sequential dependency". Prior-order ancestors are dropped, so
+        # the ablation isolates the value of the runtime-instrumented graph.
+        return [ordered_ids[-1]] if ordered_ids else []
+
+    eig.mutable_ancestors_of = chain_ancestors  # type: ignore[assignment]
+    try:
+        decision = guard.decide(eig, action_id)
+    finally:
+        eig.mutable_ancestors_of = original  # type: ignore[assignment]
+    return decision, []
+
+
+def random_graph_score(guard, eig, action_id: str, *, seed: int):
+    """Baseline B5: degree-matched random DAG replacement.
+
+    Retains the number of mutable ancestors of the action node but replaces
+    the identity of that parent set with a uniform random subset. Uses a
+    deterministic seed derived from the action id so that repeated runs on
+    the same example return the same graph, and so that A5 grid pre-commitment
+    can bind the seed as part of the config.
+    """
+    import random as _random
+    original = eig.mutable_ancestors_of
+    ordered_ids = sorted(original(action_id))
+    all_mutable = [
+        nid for nid, n in eig.nodes.items() if n.node_type.is_mutable_by_attacker
+    ]
+    k = len(ordered_ids)
+    if k == 0 or not all_mutable:
+        return guard.decide(eig, action_id), []
+
+    rng = _random.Random(seed)
+    sampled = sorted(rng.sample(all_mutable, min(k, len(all_mutable))))
+
+    def randomised_ancestors(_action_id: str) -> list[str]:
+        return sampled
+
+    eig.mutable_ancestors_of = randomised_ancestors  # type: ignore[assignment]
+    try:
+        decision = guard.decide(eig, action_id)
+    finally:
+        eig.mutable_ancestors_of = original  # type: ignore[assignment]
+    return decision, []
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
         default="pg_with_precedents",
-        choices=["backbone_only", "no_counterfactual", "clipping_only", "pg_with_precedents"],
+        choices=[
+            "backbone_only",
+            "no_counterfactual",
+            "clipping_only",
+            "pg_with_precedents",
+            "flattened_trajectory",
+            "raw_rag_concat",
+            "cip_style",
+            "sequential_graph",
+            "random_graph",
+        ],
+    )
+    parser.add_argument(
+        "--random-graph-seed",
+        type=int,
+        default=42,
+        help="Deterministic seed for the random_graph baseline (§7.3).",
     )
     parser.add_argument("--backend-name", default="llama_guard")
     parser.add_argument("--model-id", default="meta-llama/Llama-Guard-3-1B")
@@ -526,6 +753,12 @@ def main() -> None:
     )
     parser.add_argument("--precedent-safe-beta-scale", type=float, default=1.0)
     parser.add_argument("--precedent-unsafe-beta-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--trust-variant",
+        default="policy_attested",
+        choices=["no_provenance", "signature_only", "lineage", "policy_attested"],
+        help="Precedent trust tier for the §7.4 ablation.",
+    )
     parser.add_argument("--output-file", default="")
     args = parser.parse_args()
 
@@ -554,8 +787,20 @@ def main() -> None:
         if args.output_file
         else ARTIFACT_DIR / f"{args.backend_name}_{args.mode}_{args.subset}_{args.limit}.jsonl"
     )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        out = out_path.open("w", encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError(
+            "Failed to open output file for writing: "
+            f"{out_path!s}. "
+            "On mounted filesystems such as /mnt/* this usually means the target path "
+            "is blocked by a stale or corrupted directory entry. "
+            "Try a fresh PREFIX or ARTIFACT_DIR, or delete the broken path from the "
+            "host OS and rerun."
+        ) from exc
 
-    with out_path.open("w", encoding="utf-8") as out:
+    with out:
         total_rows = len(rows)
         for idx, row in enumerate(rows, start=1):
             eig, action_id = build_eig(
@@ -574,10 +819,11 @@ def main() -> None:
                 "top_matches": [],
             }
             if args.mode in {"no_counterfactual", "pg_with_precedents"}:
-                precedent_store = make_leave_one_out_precedent_store(
+                precedent_store = make_leave_one_base_task_out_precedent_store(
                     all_rows,
                     scope="agentharm",
                     held_out_example_id=row["id"],
+                    trust_variant=args.trust_variant,
                 )
                 guard_with_precedents = make_guard(
                     backend,
@@ -587,9 +833,13 @@ def main() -> None:
                     precedent_safe_beta_scale=args.precedent_safe_beta_scale,
                     precedent_unsafe_beta_scale=args.precedent_unsafe_beta_scale,
                 )
+                query_subgraph_signature = make_query_subgraph_signature(
+                    row.get("trajectory", [])
+                )
                 retrieval_diagnostics = precedent_store.retrieval_debug_summary(
                     query_summary=query_summary,
                     query_action=query_action,
+                    query_subgraph_signature=query_subgraph_signature,
                     top_k=args.retrieval_probe_top_k,
                     selected_top_k=args.precedent_top_k,
                     strategy=args.retrieval_strategy,
@@ -663,6 +913,95 @@ def main() -> None:
                     "timing_ms": decision.timing_ms,
                     "retrieval_diagnostics": decision.retrieval_diagnostics,
                 }
+            elif args.mode in {"flattened_trajectory", "cip_style"}:
+                # B1 / B3: one backbone call over the full context (or the
+                # CIP-cue augmented context), no PG pipeline stages.
+                mode_started = time.perf_counter()
+                if args.mode == "flattened_trajectory":
+                    score, capsules = flattened_trajectory_score(
+                        guard_without_precedents, eig, action_id
+                    )
+                else:
+                    score, capsules = cip_style_score(
+                        guard_without_precedents, eig, action_id
+                    )
+                total_mode_ms = (time.perf_counter() - mode_started) * 1000.0
+                decision_payload = {
+                    "score": score,
+                    "base_score": score,
+                    "s_pg": score,
+                    "pg_delta": 0.0,
+                    "verdict": "block" if score >= 0.5 else "allow",
+                    "precedent_ids": [],
+                    "parent_ids": [],
+                    "per_parent_delta": {},
+                    "per_parent_pg_clipped": {},
+                    "per_precedent_delta": {},
+                    "per_precedent_pg_clipped": {},
+                    "timing_ms": {
+                        "retrieval_ms": 0.0,
+                        "base_guard_ms": total_mode_ms,
+                        "evidence_counterfactual_ms": 0.0,
+                        "precedent_counterfactual_ms": 0.0,
+                        "aggregation_ms": 0.0,
+                    },
+                }
+            elif args.mode == "raw_rag_concat":
+                # B2: retrieve top-k, but pass them as raw prompt context.
+                assert guard_with_precedents is not None
+                mode_started = time.perf_counter()
+                score, capsules = raw_rag_concat_score(
+                    guard_with_precedents, eig, action_id
+                )
+                total_mode_ms = (time.perf_counter() - mode_started) * 1000.0
+                decision_payload = {
+                    "score": score,
+                    "base_score": score,
+                    "s_pg": score,
+                    "pg_delta": 0.0,
+                    "verdict": "block" if score >= 0.5 else "allow",
+                    "precedent_ids": [c.capsule_id for c in capsules],
+                    "parent_ids": [],
+                    "per_parent_delta": {},
+                    "per_parent_pg_clipped": {},
+                    "per_precedent_delta": {},
+                    "per_precedent_pg_clipped": {},
+                    "timing_ms": {
+                        "retrieval_ms": 0.0,
+                        "base_guard_ms": total_mode_ms,
+                        "evidence_counterfactual_ms": 0.0,
+                        "precedent_counterfactual_ms": 0.0,
+                        "aggregation_ms": 0.0,
+                    },
+                }
+            elif args.mode in {"sequential_graph", "random_graph"}:
+                # B4 / B5: PG pipeline with the mutable-ancestor set replaced
+                # by a chain (B4) or a random subset (B5) so §7.3 can isolate
+                # the value of the runtime-instrumented graph.
+                if args.mode == "sequential_graph":
+                    decision, capsules = sequential_graph_score(
+                        guard_without_precedents, eig, action_id
+                    )
+                else:
+                    seed = args.random_graph_seed
+                    decision, capsules = random_graph_score(
+                        guard_without_precedents, eig, action_id, seed=seed
+                    )
+                decision_payload = {
+                    "score": decision.s_pg,
+                    "base_score": decision.base_score,
+                    "s_pg": decision.s_pg,
+                    "pg_delta": decision.s_pg - decision.base_score,
+                    "verdict": decision.verdict.value,
+                    "precedent_ids": [],
+                    "parent_ids": list(decision.parent_ids),
+                    "per_parent_delta": decision.per_parent_delta,
+                    "per_parent_pg_clipped": decision.per_parent_pg_clipped,
+                    "per_precedent_delta": {},
+                    "per_precedent_pg_clipped": {},
+                    "timing_ms": decision.timing_ms,
+                    "retrieval_diagnostics": decision.retrieval_diagnostics,
+                }
             else:
                 assert guard_with_precedents is not None
                 decision = guard_with_precedents.decide(
@@ -670,6 +1009,9 @@ def main() -> None:
                     action_id,
                     query_summary=query_summary,
                     query_action=query_action,
+                    query_subgraph_signature=make_query_subgraph_signature(
+                        row.get("trajectory", [])
+                    ),
                 )
                 capsules = [
                     guard_with_precedents.precedent_store.get(cid)
@@ -709,6 +1051,8 @@ def main() -> None:
                         "retrieval_strategy": args.retrieval_strategy,
                         "precedent_safe_beta_scale": args.precedent_safe_beta_scale,
                         "precedent_unsafe_beta_scale": args.precedent_unsafe_beta_scale,
+                        "trust_variant": args.trust_variant,
+                        "loo_protocol": "leave_one_base_task_out",
                         "prompt_text": row["prompt"],
                         "action_text": query_action,
                         "trajectory_node_count": max(len(eig.nodes) - 2, 0),

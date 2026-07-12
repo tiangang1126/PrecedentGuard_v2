@@ -138,7 +138,7 @@ class TestHFGuardBackendCache(unittest.TestCase):
         ):
             backend._ensure_loaded()
 
-        self.assertEqual(calls["kwargs"]["torch_dtype"], "float16")
+        self.assertEqual(calls["kwargs"]["dtype"], "float16")
         self.assertNotIn("device_map", calls["kwargs"])
         self.assertEqual(fake_model.to_calls, ["cuda"])
         self.assertEqual(backend._input_device, "device:cuda")
@@ -194,6 +194,46 @@ class TestHFGuardBackendCache(unittest.TestCase):
         self.assertEqual(calls["kwargs"]["device_map"], "auto")
         self.assertEqual(fake_model.to_calls, [])
         self.assertEqual(backend._input_device, "device:cuda:0")
+
+    def test_gated_repo_error_is_raised_as_model_access_blocked(self):
+        class FakeAutoTokenizer:
+            @staticmethod
+            def from_pretrained(_model_id, cache_dir=None):
+                _ = cache_dir
+                raise OSError(
+                    "You are trying to access a gated repo. "
+                    "Cannot access gated repo for url "
+                    "`https://hf-mirror.com/google/shieldgemma-2b/resolve/main/config.json`. "
+                    "Your request to access model google/shieldgemma-2b is awaiting a review."
+                )
+
+        class FakeAutoModelForCausalLM:
+            @staticmethod
+            def from_pretrained(_model_id, **kwargs):
+                _ = kwargs
+                raise AssertionError("model should not load after tokenizer access failure")
+
+        fake_torch = SimpleNamespace(
+            float16="float16",
+            bfloat16="bfloat16",
+            float32="float32",
+            device=lambda spec: f"device:{spec}",
+        )
+        fake_transformers = SimpleNamespace(
+            AutoModelForCausalLM=FakeAutoModelForCausalLM,
+            AutoTokenizer=FakeAutoTokenizer,
+        )
+
+        backend = HFGuardBackend(model_id="google/shieldgemma-2b", device="auto", dtype="float16")
+        with patch.dict(
+            sys.modules,
+            {"torch": fake_torch, "transformers": fake_transformers},
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                backend._ensure_loaded()
+
+        self.assertIn("MODEL_ACCESS_BLOCKED", str(ctx.exception))
+        self.assertIn("google/shieldgemma-2b", str(ctx.exception))
 
 
 class TestPromptStructure(unittest.TestCase):
@@ -340,7 +380,7 @@ class TestBackendModelIDsMatchVendors(unittest.TestCase):
         self.assertEqual(ShieldGemmaBackend().model_id,
                          "google/shieldgemma-2b")
         self.assertEqual(GraniteGuardianBackend().model_id,
-                         "ibm-granite/granite-guardian-3.2-2b")
+                         "ibm-granite/granite-guardian-3.2-5b")
 
 
 if __name__ == "__main__":
